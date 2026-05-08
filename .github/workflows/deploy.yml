@@ -15,8 +15,49 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
-    name: Deploy → ${{ inputs.environment }}
+  # ── Detect what changed ────────────────────────────────────────────────────
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      infrastructure: ${{ steps.filter.outputs.infrastructure }}
+      app: ${{ steps.filter.outputs.app }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check changed paths
+        id: filter
+        run: |
+          # On workflow_dispatch there's no PR diff, so we compare HEAD vs HEAD~1.
+          # If the branch only has one commit, treat everything as changed.
+          if git rev-parse HEAD~1 > /dev/null 2>&1; then
+            CHANGED=$(git diff --name-only HEAD~1 HEAD)
+          else
+            CHANGED=$(git ls-files)
+          fi
+
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          if echo "$CHANGED" | grep -qE '^(terraform|bootstrap)/.*\.tf$'; then
+            echo "infrastructure=true" >> $GITHUB_OUTPUT
+          else
+            echo "infrastructure=false" >> $GITHUB_OUTPUT
+          fi
+
+          if echo "$CHANGED" | grep -qvE '^(terraform|bootstrap|\.github|docs)/'; then
+            echo "app=true" >> $GITHUB_OUTPUT
+          else
+            echo "app=false" >> $GITHUB_OUTPUT
+          fi
+
+  # ── Infrastructure (only when .tf files changed) ───────────────────────────
+  infrastructure:
+    name: Terraform → ${{ inputs.environment }}
+    needs: changes
+    if: needs.changes.outputs.infrastructure == 'true'
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
 
@@ -25,42 +66,30 @@ jobs:
         working-directory: terraform/
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "~> 1.15"
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION || 'eu-north-1' }}
 
       - name: Terraform Init
-        run: |
-          terraform init \
-            -backend-config="key=env/${{ inputs.environment }}/terraform.tfstate"
+        run: terraform init -backend-config="key=env/${{ inputs.environment }}/terraform.tfstate"
 
       - name: Terraform Plan
-        run: |
-          terraform plan \
-            -var-file="envs/${{ inputs.environment }}.tfvars" \
-            -out=tfplan
+        run: terraform plan -var-file="envs/${{ inputs.environment }}.tfvars" -out=tfplan
 
       - name: Terraform Apply
         run: terraform apply tfplan
 
-      # ── Smoke tests ────────────────────────────────────────────────────────
-
+      # ── Smoke tests ──────────────────────────────────────────────────────
       - name: Smoke — plan is clean (no drift)
-        run: |
-          terraform plan \
-            -var-file="envs/${{ inputs.environment }}.tfvars" \
-            -detailed-exitcode
+        run: terraform plan -var-file="envs/${{ inputs.environment }}.tfvars" -detailed-exitcode
 
       - name: Smoke — AWS resource health
         working-directory: .
@@ -73,3 +102,22 @@ jobs:
         run: bash .github/smoke-tests/http-checks.sh
         env:
           ENVIRONMENT: ${{ inputs.environment }}
+
+  # ── App deploy (only when app code changed) ────────────────────────────────
+  app:
+    name: Deploy app → ${{ inputs.environment }}
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy app code
+        run: |
+          echo "TODO: add app deploy steps here when you have app code."
+          echo "Examples:"
+          echo "  - SCP files to EC2"
+          echo "  - Build frontend and upload to S3"
+          echo "  - Push Docker image and restart service"
