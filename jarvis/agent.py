@@ -26,18 +26,17 @@ class Agent:
         facts_block = "\n".join(f"- {k}: {v}" for k, v in facts.items())
         return f"{self.soul}\n\n## What you know about the user\n{facts_block}"
 
-    def ask(self, user_input: str) -> str:
+    def ask(self, user_input: str, stream_callback=None) -> str:
         self.memory.append_message("user", user_input)
         messages = self.memory.get_recent_messages(MAX_HISTORY)
 
-        response_text = self._run(messages)
+        response_text = self._run(messages, stream_callback=stream_callback)
 
         self.memory.append_message("assistant", response_text)
         return response_text
 
-    def _run(self, messages: list[dict[str, str]]) -> str:
+    def _run(self, messages: list[dict[str, str]], stream_callback=None) -> str:
         """Stream a response, executing tool calls until a final text reply is produced."""
-        # Convert history to mutable list for tool loop
         msg_list: list[dict] = list(messages)
 
         while True:
@@ -52,7 +51,10 @@ class Agent:
                 messages=msg_list,
             ) as stream:
                 for text in stream.text_stream:
-                    print(text, end="", flush=True)
+                    if stream_callback:
+                        stream_callback(text)
+                    else:
+                        print(text, end="", flush=True)
                     full_text += text
 
                 final = stream.get_final_message()
@@ -79,6 +81,6 @@ class Agent:
                 # Loop — Claude will now produce a final reply using the tool results
 
             else:
-                # Final text reply — done
-                print()  # newline after streamed output
+                if not stream_callback:
+                    print()
                 return full_text

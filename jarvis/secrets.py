@@ -31,16 +31,20 @@ def get_secret(name: str, environment: str = "dev") -> str:
     # 2. AWS Secrets Manager
     try:
         import boto3  # noqa: PLC0415 — optional dep, only needed on EC2
-        from botocore.exceptions import ClientError
 
         path = secret_path.format(env=environment)
         client = boto3.client("secretsmanager", region_name=AWS_REGION)
         response = client.get_secret_value(SecretId=path)
-        return response["SecretString"].strip()
+        raw = response["SecretString"].strip()
+        if raw.startswith("{"):
+            import json as _json
+            data = _json.loads(raw)
+            raw = next(iter(data.values()))
+        return raw.strip().strip('"')
     except ImportError:
-        logger.debug("boto3 not installed — Secrets Manager unavailable")
+        logger.debug("boto3 not installed — skipping Secrets Manager")
     except Exception as exc:  # noqa: BLE001
-        logger.debug("Secrets Manager lookup failed for %s: %s", name, exc)
+        logger.debug("Secrets Manager failed: %s", exc)
 
     raise RuntimeError(
         f"Secret '{name}' not found. "

@@ -1,0 +1,63 @@
+.app {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── Idle view ── */
+.idle-view {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.idle-view.idle-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.9);
+}
+
+/* ── Active view ── */
+.active-view {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: row;
+  z-index: 2;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s ease;
+}
+
+.active-view.active-visible {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* Mini orb in left column */
+.active-orb {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 32px 16px;
+  transform: scale(0.45);
+  transform-origin: top center;
+  flex-shrink: 0;
+  width: 160px;
+}
+
+/* Panel area fills the rest */
+.panel-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid rgba(0, 100, 200, 0.15);
+  min-height: 0;
+  overflow: hidden;
+}
