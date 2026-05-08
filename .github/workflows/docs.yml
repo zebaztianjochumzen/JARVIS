@@ -1,0 +1,40 @@
+name: Update Documentation
+
+on:
+  push:
+    branches: [dev, main]
+    paths-ignore:
+      - 'documentation.md'
+
+permissions:
+  contents: write
+
+jobs:
+  generate-docs:
+    name: Regenerate documentation.md
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Anthropic SDK
+        run: pip install anthropic
+
+      - name: Generate documentation
+        run: python .github/scripts/generate_docs.py
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Commit updated docs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add documentation.md
+          git diff --staged --quiet || git commit -m "docs: auto-update [skip ci]"
+          git push origin HEAD
