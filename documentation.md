@@ -222,34 +222,229 @@ Requires: `ANTHROPIC_API_KEY` repository secret.
 
 ## 5. CI Pipeline & Security Checks
 
-All five jobs must pass before any PR can merge to `main` (enforced via branch protection rules).
+All eight jobs must pass before any PR can merge to `main` (enforced via branch protection rules).
 
-| # | Job | Tool | What it checks | Fails hard? |
-|---|---|---|---|---|
-| 1 | Secret scan | gitleaks v8.18.4 | Secrets, API keys, tokens accidentally committed | Yes |
-| 2 | Terraform checks | terraform fmt + validate | HCL formatting and syntax validity | Yes |
-| 3 | Terraform security | tfsec | AWS security misconfigurations (open ports, missing encryption, etc.) | No (soft fail) |
-| 4 | Python lint | pylint (score ≥ 8.0) | Code quality, unused imports, naming conventions | Yes |
-| 5 | Python security | bandit (-ll) | Security bugs: eval, subprocess injection, weak crypto, hardcoded secrets | Yes (medium+) |
+| # | Job | Tool | Category | What it checks | Fails hard? |
+|---|---|---|---|---|---|
+| 1 | Secret scan | gitleaks v8.18.4 | Security | Secrets, API keys, tokens accidentally committed | Yes |
+| 2 | Terraform checks | terraform fmt + validate | Correctness | HCL formatting and syntax validity | Yes |
+| 3 | Terraform security | tfsec | Security | AWS security misconfigurations | No (soft fail) |
+| 4 | Python lint | pylint ≥ 8.0 | Quality | Code quality, unused imports, naming | Yes |
+| 5 | Python security | bandit -ll | Security | Security bugs in Python code | Yes (medium+) |
+| 6 | Python types | mypy | Correctness | Type errors and missing annotations | Yes |
+| 7 | Shell scripts | shellcheck | Correctness | Bash errors and unsafe patterns | Yes |
+| 8 | IaC deep scan | checkov | Security | Misconfigs in Terraform + GitHub Actions | No (soft fail) |
 
-### gitleaks config (`.gitleaks.toml`)
-Extends the default ruleset. Allowlisted safe strings:
-- `jarvis-tf-state-eun1` — S3 bucket name, not a secret
-- `eu-north-1`, `us-east-1` — AWS region strings
+---
 
-Ignored paths:
-- `terraform/.terraform.lock.hcl` — provider lock file
-- `documentation.md` — auto-generated, may contain code snippets
+### Job 1 — Secret scan (`gitleaks`)
 
-### pylint config (`pyproject.toml`)
+**Tool:** gitleaks v8.18.4
+**Trigger:** Every push and PR
+**Fails:** Yes — blocks merge if any secret is found
+
+Scans the entire git history (not just the latest commit — `fetch-depth: 0`) for leaked credentials. Catches patterns like AWS access keys, API tokens, private keys, connection strings, and hundreds of other secret formats.
+
+**Config (`.gitleaks.toml`):**
+- Extends the default ruleset (covers 150+ secret patterns out of the box)
+- Allowlisted safe strings that would otherwise trigger false positives:
+  - `jarvis-tf-state-eun1` — S3 bucket name, not a secret
+  - `eu-north-1`, `us-east-1` — AWS region strings
+- Ignored paths:
+  - `terraform/.terraform.lock.hcl` — provider lock file with hashes
+  - `documentation.md` — auto-generated, may contain code snippets
+
+**What it catches:**
+- `AKIA...` AWS access key IDs
+- `-----BEGIN RSA PRIVATE KEY-----` private keys
+- `ghp_...` GitHub personal access tokens
+- Any string matching 150+ built-in secret patterns
+
+---
+
+### Job 2 — Terraform checks (`terraform`)
+
+**Tool:** Terraform v1.15
+**Trigger:** Every push and PR
+**Fails:** Yes
+
+Two steps that validate the HCL code is both correctly formatted and syntactically valid:
+
+**`terraform fmt -check -recursive`**
+Checks that all `.tf` files across the entire repo are formatted to Terraform's canonical style. Does not auto-fix — fails if any file needs formatting. Run `terraform fmt -recursive` locally to fix.
+
+**`terraform init -backend=false && terraform validate`**
+- Runs for both `terraform/` and `bootstrap/`
+- `-backend=false` skips S3 state init (no AWS credentials needed in CI)
+- `validate` checks that all resource types, argument names, and variable references are valid HCL — catches typos in resource names, wrong argument types, missing required fields
+
+**What it catches:**
+- Indentation/spacing inconsistencies
+- Invalid resource type names (e.g. `aws_ec` instead of `aws_instance`)
+- Wrong argument names on resources
+- References to undefined variables
+- Circular dependencies between resources
+
+---
+
+### Job 3 — Terraform security (`tfsec`)
+
+**Tool:** tfsec via `aquasecurity/tfsec-action@v1.0.0`
+**Trigger:** Every push and PR
+**Fails:** No (soft fail — reports issues but doesn't block merge)
+
+Scans `terraform/` for AWS security misconfigurations. Soft-fail while the project is early-stage — review findings and harden over time.
+
+**What it catches:**
+- Security groups open to `0.0.0.0/0` (currently flagged — SSH is world-open)
+- EC2 instances without encrypted EBS volumes
+- S3 buckets without versioning or logging
+- Missing resource tags
+- IAM policies that are overly permissive
+
+**Known current findings:**
+- SSH ingress on port 22 is open to `0.0.0.0/0` — intentional for now, should be restricted to your IP in production
+
+---
+
+### Job 4 — Python lint (`pylint`)
+
+**Tool:** pylint (fail threshold: 8.0 / 10)
+**Trigger:** Every push and PR
+**Fails:** Yes — if score drops below 8.0
+
+Scans all Python files under `.github/scripts/`.
+
+**Config (`pyproject.toml`):**
 - Python 3.12
-- Max line length: 100
-- Disabled: `C0114` (module docstrings), `C0116` (function docstrings), `W0511` (TODO comments)
+- Max line length: 100 characters
+- Disabled rules:
+  - `C0114` — module-level docstrings not required
+  - `C0116` — function docstrings not required
+  - `W0511` — TODO/FIXME comments are allowed
+
+**What it catches:**
+- Unused imports and variables
+- Undefined variables
+- Unreachable code
+- Too many arguments / branches / statements
+- Incorrect string formatting
+- Wrong number of arguments in function calls
+
+---
+
+### Job 5 — Python security (`bandit`)
+
+**Tool:** bandit with `-ll` (medium and high severity only)
+**Trigger:** Every push and PR
+**Fails:** Yes — on any medium or high severity finding
+
+Scans all Python files under `.github/scripts/` for security vulnerabilities.
+
+**What it catches:**
+| Issue | Example | Severity |
+|---|---|---|
+| Hardcoded passwords | `password = "secret123"` | High |
+| Use of `eval()` | `eval(user_input)` | High |
+| Shell injection | `subprocess.run(cmd, shell=True)` | High |
+| Weak hashing | `hashlib.md5(data)` | Medium |
+| Insecure random | `random.random()` for tokens | Medium |
+| Pickle deserialization | `pickle.loads(data)` | Medium |
+| SQL injection | `cursor.execute("SELECT " + input)` | High |
+| Unsafe YAML | `yaml.load()` instead of `yaml.safe_load()` | Medium |
+
+Low-severity findings are reported but do not fail the job (`-ll` = low-level and above report, only medium+ fail).
+
+---
+
+### Job 6 — Python type check (`mypy`)
+
+**Tool:** mypy with `--disallow-untyped-defs --warn-redundant-casts`
+**Trigger:** Every push and PR
+**Fails:** Yes — on any type error
+
+Statically analyses Python code for type errors without running it. Catches bugs that only show up at runtime.
+
+**Flags:**
+- `--ignore-missing-imports` — skips type checking for third-party libraries without stubs (e.g. `anthropic`)
+- `--disallow-untyped-defs` — every function must have type annotations on all parameters and return types
+- `--warn-redundant-casts` — flags unnecessary `cast()` calls
+
+**What it catches:**
+- Calling a function with the wrong argument type
+- Using a `None`-able variable without a null check
+- Returning the wrong type from a function
+- Accessing an attribute that doesn't exist on a type
+- Missing type annotations on new functions (enforced by `--disallow-untyped-defs`)
+
+Example — caught at CI time, not at runtime:
+```python
+def get_count() -> int:
+    return "five"  # mypy: error: Incompatible return value type (got "str", expected "int")
+```
+
+---
+
+### Job 7 — Shell script checks (`shellcheck`)
+
+**Tool:** shellcheck (installed via apt)
+**Trigger:** Every push and PR
+**Fails:** Yes — on any error or warning
+
+Statically analyses all `.sh` files under `.github/smoke-tests/` for bash errors and unsafe patterns.
+
+**What it catches:**
+- Unquoted variables that cause word splitting: `rm $FILE` → should be `rm "$FILE"`
+- Missing error handling: commands that fail silently
+- Incorrect `[ ]` vs `[[ ]]` usage
+- Useless `cat` followed by a pipe
+- Using `$?` incorrectly
+- Portability issues between sh and bash
+- Pipes to `read` that lose variables due to subshell scoping
+
+Example — currently enforced in `aws-health.sh` and `http-checks.sh`:
+```bash
+# shellcheck would catch this:
+FILE=my file.txt
+rm $FILE        # SC2086: word splits into "rm my file.txt" → 3 args
+rm "$FILE"      # correct
+```
+
+Both smoke test scripts already use `set -euo pipefail` which shellcheck recognises as correct error handling.
+
+---
+
+### Job 8 — IaC deep scan (`checkov`)
+
+**Tool:** checkov (via pip)
+**Trigger:** Every push and PR
+**Fails:** No (soft fail on all three scans)
+
+Broader IaC scanner than tfsec — covers Terraform, GitHub Actions workflows, and general security best practices. Runs three separate scans:
+
+1. **`checkov -d terraform/`** — scans main infrastructure
+2. **`checkov -d bootstrap/`** — scans bootstrap infrastructure
+3. **`checkov -d .github/workflows/`** — scans GitHub Actions YAML for workflow security issues
+
+**What it catches (beyond tfsec):**
+- GitHub Actions: using `pull_request_target` without careful input handling
+- GitHub Actions: missing `permissions` blocks on workflows
+- GitHub Actions: pinning actions to a branch instead of a commit SHA
+- Terraform: missing resource tags
+- Terraform: EC2 instances without IMDSv2 enforced
+- Terraform: S3 buckets missing access logging
+- Terraform: security groups with overly broad rules
+- Over 1000 built-in checks across AWS, GCP, Azure, and IaC tools
+
+---
 
 ### Dependabot (`.github/dependabot.yml`)
-Runs every Monday and opens PRs for:
-- Outdated or vulnerable **pip packages** (e.g. `anthropic` SDK)
-- Outdated **GitHub Actions** versions (e.g. `actions/checkout`, `hashicorp/setup-terraform`)
+
+Runs every Monday and automatically opens PRs for:
+- Outdated or vulnerable **pip packages** (e.g. `anthropic` SDK, `bandit`, `checkov`, `mypy`)
+- Outdated **GitHub Actions** versions (e.g. `actions/checkout@v4` → v5, `hashicorp/setup-terraform@v3` → v4)
+
+These PRs go through CI like any other PR — they must pass all 8 checks before they can be merged.
 
 ---
 
