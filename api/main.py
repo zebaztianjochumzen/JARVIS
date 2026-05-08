@@ -90,6 +90,48 @@ async def get_stocks():
     return {"stocks": results}
 
 
+# ── News endpoint ─────────────────────────────────────────────────────────────
+
+NEWS_FEEDS = [
+    ("SVT Nyheter",      "https://www.svt.se/nyheter/rss.xml"),
+    ("Aftonbladet",      "https://rss.aftonbladet.se/rss2/small/pages/sections/senastenytt/"),
+    ("Dagens industri",  "https://www.di.se/rss"),
+]
+
+@app.get("/api/news")
+async def get_news():
+    import feedparser
+    import requests
+    import time
+
+    HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; JARVIS/1.0)"}
+
+    articles = []
+    for source, url in NEWS_FEEDS:
+        try:
+            resp = requests.get(url, headers=HEADERS, timeout=8, verify=False)
+            feed = feedparser.parse(resp.content)
+            for entry in feed.entries[:6]:
+                pub = entry.get("published_parsed") or entry.get("updated_parsed")
+                articles.append({
+                    "source":    source,
+                    "title":     entry.get("title", ""),
+                    "summary":   entry.get("summary", ""),
+                    "link":      entry.get("link", ""),
+                    "published": time.mktime(pub) if pub else 0,
+                    "image":     (
+                        entry.get("media_thumbnail", [{}])[0].get("url") or
+                        entry.get("media_content",   [{}])[0].get("url") or
+                        None
+                    ),
+                })
+        except Exception:
+            continue
+
+    articles.sort(key=lambda a: a["published"], reverse=True)
+    return {"articles": articles[:30]}
+
+
 # ── WebSocket chat ─────────────────────────────────────────────────────────────
 
 @app.websocket("/ws")

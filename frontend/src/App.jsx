@@ -4,6 +4,7 @@ import Orb from './components/Orb'
 import Clock from './components/Clock'
 import Chat from './components/Chat'
 import StocksPanel from './components/StocksPanel'
+import NewsPanel from './components/NewsPanel'
 import NavBar from './components/NavBar'
 import './App.css'
 
@@ -83,9 +84,12 @@ export default function App() {
 
       {/* Active: mini orb + panels + nav */}
       <div className={`active-view${active ? ' active-visible' : ''}`} style={{ paddingBottom: 52 }}>
-        <div className="active-orb">
-          <Orb onClick={() => {}} thinking={thinking} />
-        </div>
+        {/* Orb column — only show in chat mode */}
+        {tab === 'chat' && (
+          <div className="active-orb">
+            <Orb onClick={() => {}} thinking={thinking} />
+          </div>
+        )}
 
         <div className="panel-area">
           <div style={{ display: tab === 'chat' ? 'flex' : 'none', flexDirection: 'column', height: '100%' }}>
@@ -94,7 +98,21 @@ export default function App() {
           <div style={{ display: tab === 'stocks' ? 'block' : 'none', height: '100%' }}>
             <StocksPanel />
           </div>
+          <div style={{ display: tab === 'news' ? 'flex' : 'none', height: '100%' }}>
+            <NewsPanel />
+          </div>
         </div>
+
+        {/* Mini orb corner — for non-chat panels */}
+        {tab !== 'chat' && (
+          <div style={{
+            position: 'fixed', bottom: 60, right: 24,
+            transform: 'scale(0.38)', transformOrigin: 'bottom right',
+            zIndex: 50,
+          }}>
+            <Orb onClick={() => setTab('chat')} thinking={thinking} />
+          </div>
+        )}
       </div>
 
       {active && <NavBar active={tab} onChange={handleTabChange} />}

@@ -1,6 +1,7 @@
 const TABS = [
   { id: 'chat',   label: 'CHAT',   icon: '◎' },
   { id: 'stocks', label: 'STOCKS', icon: '▲' },
+  { id: 'news',   label: 'NEWS',   icon: '◈' },
 ]
 
 export default function NavBar({ active, onChange }) {
