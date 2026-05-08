@@ -1,0 +1,23 @@
+# Terraform local state and plugin cache
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# tfvars may contain secrets — use *.tfvars.example for templates
+*.tfvars
+*.tfvars.json
+
+# Plan output files
+*tfplan*
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# CLI config
+.terraformrc
+terraform.rc
