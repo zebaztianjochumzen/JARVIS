@@ -1,0 +1,19 @@
+[extend]
+# Use the default gitleaks ruleset as the base
+useDefault = true
+
+[allowlist]
+description = "Known safe values"
+regexes = [
+  # Terraform state bucket name — not a secret
+  "jarvis-tf-state-eun1",
+  # AWS region strings
+  "eu-north-1",
+  "us-east-1",
+]
+
+# Ignore auto-generated lock files and docs
+paths = [
+  "terraform/.terraform.lock.hcl",
+  "documentation.md",
+]

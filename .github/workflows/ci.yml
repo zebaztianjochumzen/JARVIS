@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+jobs:
+  # ── 1. Secret scanning ─────────────────────────────────────────────────────
+  gitleaks:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz \
+            | tar -xz gitleaks
+          sudo mv gitleaks /usr/local/bin/
+
+      - name: Run gitleaks
+        run: gitleaks detect --source . --config .gitleaks.toml --verbose --redact
+
+  # ── 2. Terraform format + validate ────────────────────────────────────────
+  terraform:
+    name: Terraform checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~> 1.15"
+
+      - name: Format check
+        run: terraform fmt -check -recursive
+
+      - name: Validate — terraform/
+        run: terraform init -backend=false && terraform validate
+        working-directory: terraform/
+
+      - name: Validate — bootstrap/
+        run: terraform init -backend=false && terraform validate
+        working-directory: bootstrap/
+
+  # ── 3. Terraform security (tfsec) ─────────────────────────────────────────
+  tfsec:
+    name: Terraform security (tfsec)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-action@v1.0.0
+        with:
+          working_directory: terraform/
+          soft_fail: true
+
+  # ── 4. Python lint (pylint) ───────────────────────────────────────────────
+  pylint:
+    name: Python lint (pylint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pylint anthropic
+
+      - name: Run pylint
+        run: pylint .github/scripts/ --fail-under=8.0

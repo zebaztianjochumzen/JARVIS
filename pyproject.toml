@@ -1,0 +1,13 @@
+[tool.pylint.main]
+# Run on Python 3.12
+py-version = "3.12"
+
+[tool.pylint.messages_control]
+disable = [
+  "C0114",  # missing-module-docstring
+  "C0116",  # missing-function-docstring
+  "W0511",  # fixme / TODO comments are fine
+]
+
+[tool.pylint.format]
+max-line-length = 100
