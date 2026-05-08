@@ -1,18 +1,64 @@
 # JARVIS — Build Roadmap
 
 > Vision: A personal AI assistant with the look, feel, and voice of the Iron Man JARVIS.
-> Not a clone of anything — built from scratch, inspired by the character.
+> Built from scratch. The goal is to match the actual JARVIS from the movies as closely as possible.
 
 ---
 
 ## The Vision
 
-JARVIS is a voice-first AI assistant that lives on your machine and feels like a real intelligence.
-It speaks back in a calm, precise British voice. It has a HUD-style interface that feels like a cockpit.
-It knows who you are, remembers context across sessions, and can take real actions in the world.
+JARVIS is a persistent AI presence on your screen. It lives in the corner as a glowing orb,
+always listening, always watching. The main screen is a live intelligence dashboard —
+world news, markets, maps, briefings — all rendered in a dark HUD aesthetic.
 
-The aesthetic: dark navy backgrounds, glowing blue rings, grid overlays, HUD brackets, clean monospace type.
-The feeling: you are Tony Stark at your desk.
+You speak to it. It speaks back in a calm, precise British voice.
+It knows what's on your desk. It knows what's happening in the world.
+It knows your schedule, your tasks, your codebase.
+
+The screen looks like a cockpit. You feel like Tony Stark.
+
+---
+
+## The Interface — What It Looks Like
+
+From the reference screenshots, the layout is:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  STOCK TICKER  ·  DOW  ·  NASDAQ  ·  S&P 500  ·  BTC  ·  ...  │  ← top bar, always visible
+├──────────────────────────────────────┬──────────────────────────┤
+│                                      │                          │
+│   MAIN PANEL                         │   SIDE PANEL            │
+│   (news feed / map / camera /        │   (stock chart /        │
+│    briefing / terminal)              │    JARVIS response /    │
+│                                      │    news headlines)      │
+│                                      │                          │
+├──────────────────────────────────────┴──────────────────────────┤
+│  [home] [map] [news] [terminal] [music]    ·  status  ·  time  │  ← bottom bar
+│                                                     ┌─────────┐ │
+│                                                     │  JARVIS │ │  ← persistent orb, bottom right
+│                                                     └─────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+The JARVIS orb lives permanently in the bottom-right corner. Every mode shares the same
+top ticker, bottom nav, and corner orb. The main + side panels change per mode.
+
+---
+
+## Design Language
+
+| Element | Value |
+|---|---|
+| Background | `#080c14` — near-black navy |
+| Grid overlay | Subtle dot grid or fine line grid, 5% opacity |
+| Primary glow | `#0af` — electric blue |
+| Ring / orb | White circle + blue halo blur |
+| Text | `#c8dff0` — cool ice white |
+| Accent / alerts | `#f0a500` — amber |
+| Font | `JetBrains Mono` or `IBM Plex Mono` — monospace throughout |
+| HUD chrome | Corner brackets, tick marks on edges, scan line sweep |
+| Animations | All CSS ease-in-out 150–300ms, nothing bouncy |
 
 ---
 
@@ -20,267 +66,296 @@ The feeling: you are Tony Stark at your desk.
 
 | Layer | Technology | Why |
 |---|---|---|
-| AI Brain | Claude API (claude-sonnet-4-6) | Best reasoning, tool use, long context |
-| Voice In (STT) | OpenAI Whisper (local) | Fast, accurate, runs offline |
-| Voice Out (TTS) | ElevenLabs API or local Coqui/Piper | Natural British male voice |
-| Wake Word | Porcupine (Picovoice) | Offline, low-latency "Hey JARVIS" detection |
-| Backend | Python + FastAPI | Async, WebSocket support for streaming |
-| Frontend | React + HTML5 Canvas | HUD animations, real-time voice visualiser |
-| Memory | SQLite (local) + S3 (backup) | Persistent facts, conversation summaries |
-| Agent Tools | Custom Python functions | What JARVIS can actually do |
-| Deployment | AWS EC2 (eu-north-1) — already set up | Remote access, always-on option |
-| Hardware | Mac (primary), Raspberry Pi (optional kiosk) | Runs locally on Apple Silicon |
+| AI Brain | Claude API (`claude-sonnet-4-6`) | Best reasoning, tool use, vision |
+| Voice In (STT) | OpenAI Whisper (local, faster-whisper) | Fast, offline, accurate |
+| Voice Out (TTS) | ElevenLabs API — British male voice | Natural, character-accurate |
+| Wake Word | Porcupine (Picovoice) | Offline "Hey JARVIS" detection |
+| Backend | Python + FastAPI + WebSockets | Async, real-time streaming |
+| Frontend | React + Vite + Canvas | HUD panels, animations, audio viz |
+| News feed | RSS aggregation + live video embed | World news headlines + stream |
+| Market data | Yahoo Finance API or Alpaca | Real-time stocks, crypto |
+| Maps | Mapbox GL JS (dark theme) | Interactive routing, dark styled |
+| Vision | Raspberry Pi 5 + Camera + YOLO | Object detection on your desk |
+| Memory | SQLite (local) + S3 backup | Persistent facts + conversation |
+| Deployment | AWS EC2 eu-north-1 — already set up | Always-on remote access |
 
 ---
 
-## Phase 1 — Core AI Brain
+## Phase 1 — AI Brain & Personality
 
-**Goal:** JARVIS can have a real conversation via text, with memory and personality.
+**Goal:** JARVIS can have a real conversation with memory and a locked persona.
 
-### 1.1 Agent Framework
-- [ ] Create `jarvis/agent.py` — wraps Claude API with system prompt
-- [ ] Write the JARVIS persona system prompt (calm, precise, slightly dry British wit)
-- [ ] Add conversation history management (rolling window + summarisation)
-- [ ] Streaming responses (token by token, not waiting for full reply)
+### 1.1 Agent Core (`jarvis/agent.py`)
+- [ ] Wrap Claude API with streaming support (token-by-token, not batch)
+- [ ] Conversation history with rolling window + auto-summarisation when context grows
+- [ ] Tool call execution loop — Claude decides what tool to run, JARVIS executes it
 
-### 1.2 Persistent Memory
-- [ ] Create `jarvis/memory.py` — SQLite-backed memory store
-- [ ] Store: user facts, preferences, past tasks, summaries of old conversations
-- [ ] Memory injection: relevant memories are retrieved and added to each prompt
-- [ ] Memory tool: JARVIS can explicitly save and recall facts ("Remember that...")
+### 1.2 SOUL.md — JARVIS Identity
+- [ ] Defines who JARVIS is, his tone, his rules, his personality
+- [ ] Loaded into every conversation as the system prompt
+- [ ] JARVIS: calm, precise, dry British wit, never breaks character
+- [ ] JARVIS refers to the user by name and tracks preferences
+- [ ] Never says "As an AI language model..." — always stays in persona
 
-### 1.3 Personality & Persona
-- [ ] SOUL.md — defines JARVIS's character, tone, rules, and self-identity
-- [ ] JARVIS should refer to the user by name
-- [ ] JARVIS should never break character (no "As an AI language model...")
-- [ ] JARVIS should have opinions and push back when appropriate
+### 1.3 Persistent Memory (`jarvis/memory.py`)
+- [ ] SQLite-backed store: user facts, preferences, task history, summaries
+- [ ] Semantic retrieval — relevant memories injected into each prompt
+- [ ] Memory tools: `remember_this`, `recall`, `forget`
+- [ ] Survives restarts — memory persists across sessions
 
-### 1.4 Simple CLI Interface (test harness)
-- [ ] `python -m jarvis` — start a text conversation in the terminal
-- [ ] Lets us test the brain before building voice or UI
+### 1.4 CLI Test Harness
+- [ ] `python -m jarvis` — text conversation in the terminal
+- [ ] Lets us test brain + memory before building voice or UI
 
 ---
 
 ## Phase 2 — Voice Pipeline
 
-**Goal:** Speak to JARVIS and hear it respond. Hands-free.
+**Goal:** Fully hands-free. Speak, JARVIS responds, no keyboard needed.
 
-### 2.1 Wake Word Detection
-- [ ] Integrate Porcupine (Picovoice) for offline wake word detection
-- [ ] Wake word: "Hey JARVIS" or "JARVIS"
-- [ ] On detection: play a soft activation sound + start listening
-- [ ] On silence/end-of-speech: stop recording and process
+### 2.1 Wake Word (`jarvis/voice/wakeword.py`)
+- [ ] Porcupine offline wake word: "Hey JARVIS"
+- [ ] On detection: soft activation chime + start recording
+- [ ] LED / orb pulse animation triggered via WebSocket event
 
-### 2.2 Speech-to-Text (STT)
-- [ ] Integrate OpenAI Whisper (whisper.cpp or faster-whisper for speed)
-- [ ] Run locally — no API calls for STT
-- [ ] Target: < 500ms transcription latency for short commands
-- [ ] Strip filler words and normalise punctuation before sending to Claude
+### 2.2 Speech-to-Text (`jarvis/voice/listener.py`)
+- [ ] faster-whisper running locally (small or medium model)
+- [ ] VAD (Silero) to detect end of speech — stop recording when you stop talking
+- [ ] Target latency: < 400ms transcription for short commands
+- [ ] Strip filler words before sending to Claude
 
-### 2.3 Text-to-Speech (TTS)
-- [ ] Primary: ElevenLabs API — use a calm British male voice
-- [ ] Fallback: Coqui TTS or Piper (local, no internet needed)
+### 2.3 Text-to-Speech (`jarvis/voice/speaker.py`)
+- [ ] ElevenLabs API — calm British male voice
 - [ ] Stream audio chunks as they arrive — don't wait for full sentence
-- [ ] JARVIS should not interrupt itself if you speak during a response
+- [ ] Fallback: Piper TTS (local, offline, free)
+- [ ] JARVIS does not interrupt itself if you speak mid-response
 
-### 2.4 Voice Activity Detection (VAD)
-- [ ] Use Silero VAD to detect when the user has stopped speaking
-- [ ] Threshold tuning so ambient noise doesn't trigger false positives
-- [ ] Visual indicator in UI when JARVIS is "listening" vs "thinking" vs "speaking"
-
-### 2.5 Audio Pipeline
-- [ ] `jarvis/voice/listener.py` — microphone capture + VAD + Whisper
-- [ ] `jarvis/voice/speaker.py` — TTS audio playback with queue
-- [ ] `jarvis/voice/pipeline.py` — orchestrates the full listen → think → speak loop
+### 2.4 Voice Pipeline Orchestrator (`jarvis/voice/pipeline.py`)
+- [ ] Loop: listen → transcribe → think → speak → listen
+- [ ] State machine: IDLE → LISTENING → THINKING → SPEAKING
+- [ ] State broadcast via WebSocket so the HUD orb animates correctly
 
 ---
 
 ## Phase 3 — HUD Frontend
 
-**Goal:** An Iron Man-style interface that looks stunning on your monitor.
+**Goal:** The Iron Man interface. Everything from the reference screenshots.
 
-### 3.1 Design Language
-The interface should feel like a real piece of technology from a near-future world.
+### 3.1 App Shell & Layout
+- [ ] React + Vite project in `frontend/`
+- [ ] Full-screen dark layout: top bar + main panel + side panel + bottom nav
+- [ ] CSS Grid layout, responsive to monitor size
+- [ ] Background: `#080c14` + subtle dot-grid overlay
+- [ ] Corner HUD bracket decorations (CSS pseudo-elements)
+- [ ] Horizontal scan-line sweep animation on a timer
 
-- **Background**: Deep navy `#0a0e1a` with a subtle dot-grid or line-grid overlay
-- **Primary colour**: Electric blue `#00aaff` for active elements and glow effects
-- **Secondary**: Ice white `#e8f4ff` for text and rings
-- **Accent**: Amber `#ffaa00` for warnings or secondary data
-- **Typography**: `JetBrains Mono` or `IBM Plex Mono` — monospace, technical, clean
-- **Animations**: All transitions ease-in-out, 200-400ms — snappy but not jarring
-- **Glow effects**: CSS `box-shadow` and `filter: blur` for the blue halo effect
-
-### 3.2 Central Orb
-- [ ] Animated circle that breathes / pulses when idle
-- [ ] Expands and glows when listening (listening state)
-- [ ] Fast spin/pulse when thinking (processing state)
-- [ ] Slow wave animation when speaking (speaking state)
+### 3.2 JARVIS Orb (Persistent, Bottom-Right)
+- [ ] White ring with electric blue outer glow (`box-shadow + filter: blur`)
 - [ ] "JARVIS" logotype centred inside
-- [ ] Outer ring with tick marks (like a compass or radar sweep)
+- [ ] Idle state: slow breathing pulse
+- [ ] Listening state: faster pulse, ring expands
+- [ ] Thinking state: spinning arc animation
+- [ ] Speaking state: audio-reactive waveform around the ring (Web Audio API)
+- [ ] Orb state driven by WebSocket messages from the backend
 
-### 3.3 HUD Chrome
-- [ ] Corner bracket decorations (top-left, top-right, bottom-left, bottom-right)
-- [ ] Top bar: current time (24h), date, system status
-- [ ] Bottom bar: navigation icons (Home, Tasks, Terminal, Music, Settings)
-- [ ] Thin horizontal scan line that sweeps down the screen periodically
-- [ ] Subtle grid overlay on the background (CSS `background-image: linear-gradient`)
+### 3.3 Top Stock Ticker Bar
+- [ ] Scrolling horizontal ticker: DOW · NASDAQ · S&P 500 · BTC · ETH · custom stocks
+- [ ] Each item: symbol, price, % change, colour-coded (green up / red down)
+- [ ] Real-time updates every 30 seconds
+- [ ] Amber alert colour if any index moves > 2% in a session
 
-### 3.4 Voice Visualiser
-- [ ] Real-time audio waveform / frequency bars around the orb when speaking
-- [ ] Built with Web Audio API + Canvas
-- [ ] Bars glow blue and animate to the TTS audio output
-- [ ] Collapses back to the ring when silent
+### 3.4 Bottom Navigation Bar
+- [ ] Icon nav: Home · Map · News · Terminal · Music · Settings
+- [ ] Active mode highlighted with blue glow underline
+- [ ] Right side: clock (24h HH:MM:SS), date, system status dot
 
-### 3.5 Conversation Panel
-- [ ] Sliding panel (right side or bottom) for the conversation transcript
-- [ ] JARVIS responses appear with a typing/streaming animation character by character
-- [ ] User input shown above, JARVIS reply below — clean minimal layout
-- [ ] Timestamp on each message
-- [ ] Panel can be hidden — HUD should work in voice-only mode too
+### 3.5 Mode: HOME (default)
+- [ ] Left panel: JARVIS conversation transcript — streaming character-by-character
+- [ ] Right panel: daily briefing summary (auto-generated by JARVIS at startup)
+- [ ] Briefing covers: weather, calendar events, top news, market summary
+- [ ] Each message timestamped in monospace
 
-### 3.6 Status Indicators
-- [ ] System status bar: CPU %, memory, uptime
-- [ ] AWS connection status (green/red dot)
-- [ ] Microphone status (active/inactive)
-- [ ] LLM model indicator (which Claude model is active)
+### 3.6 Mode: NEWS
+- [ ] Left panel: embedded live news video stream (Al Jazeera, BBC World, etc.)
+- [ ] Right panel: live news headlines (RSS feed, auto-refreshed)
+- [ ] JARVIS can summarise any headline on command: "Tell me more about that"
+- [ ] Ticker at bottom of news panel with latest headlines scrolling
 
-### 3.7 Tech
-- [ ] React + Vite for the frontend build
-- [ ] WebSocket connection to FastAPI backend for streaming responses
-- [ ] Web Audio API for microphone capture and TTS playback
-- [ ] CSS custom properties for the full colour system
-- [ ] `framer-motion` for all transitions and animations
+### 3.7 Mode: MAP
+- [ ] Full-panel Mapbox GL JS map — dark style (`mapbox://styles/mapbox/dark-v11`)
+- [ ] Default view: your location or Stockholm
+- [ ] Voice commands: "Show me the route from Stockholm to Oslo"
+- [ ] JARVIS can plot routes, drop pins, show points of interest
+- [ ] Live traffic overlay optional
 
----
+### 3.8 Mode: TERMINAL
+- [ ] Embedded terminal view — shows live tool execution output
+- [ ] When JARVIS runs a shell command or git operation, output streams here
+- [ ] Monospace font, green-on-dark colour scheme within the panel
+- [ ] Previous commands scrollable
 
-## Phase 4 — Tools & Skills
+### 3.9 Mode: MUSIC
+- [ ] Spotify integration: now playing, album art (dark-tinted), progress bar
+- [ ] Voice control: "Play something calm" / "Skip" / "Pause"
+- [ ] Audio visualiser bars in the panel (same Web Audio API as orb)
 
-**Goal:** JARVIS can take real actions, not just answer questions.
-
-### 4.1 Tool Framework
-- [ ] `jarvis/tools/` — directory for all tool definitions
-- [ ] Each tool: a Python function + JSON schema description passed to Claude
-- [ ] Claude decides when to call tools; JARVIS executes and returns results
-- [ ] Tool calls are shown visually in the HUD ("Executing: web_search...")
-
-### 4.2 Core Tools (Day One)
-- [ ] **`web_search`** — search the web via Brave Search API or SerpAPI
-- [ ] **`get_time`** — current time and date (timezone-aware)
-- [ ] **`open_app`** — open a Mac app by name (`open -a "Spotify"`)
-- [ ] **`set_timer`** — set a countdown timer with audio alert
-- [ ] **`read_clipboard`** / **`write_clipboard`** — read/write Mac clipboard
-- [ ] **`run_shell`** — execute a shell command (with a safety allowlist)
-- [ ] **`take_screenshot`** — capture the screen and pass the image to Claude
-- [ ] **`save_note`** — save a note to a local markdown file
-
-### 4.3 Developer Tools
-- [ ] **`read_file`** / **`write_file`** — read and write files in a workspace
-- [ ] **`git_status`** — run `git status` and summarise the output
-- [ ] **`run_tests`** — trigger the CI suite locally and report results
-- [ ] **`search_codebase`** — grep/ripgrep the working directory
-
-### 4.4 Smart Home (Future)
-- [ ] **`control_lights`** — Philips Hue / Home Assistant integration
-- [ ] **`get_weather`** — current and forecast weather
-- [ ] **`play_music`** — Spotify playback control
-- [ ] **`send_message`** — send a message via iMessage or Slack
-
-### 4.5 Raspberry Pi Integration (Future)
-- [ ] JARVIS running on a Raspberry Pi as a dedicated always-on kiosk
-- [ ] Small touchscreen HUD display
-- [ ] Physical LED ring (NeoPixel) that lights up on wake word
-- [ ] Hardware mute button
+### 3.10 Stock Chart Panel (companion to HOME / NEWS)
+- [ ] Line chart for a selected stock/index
+- [ ] Dark-styled: `#0af` line on `#0d1420` background
+- [ ] 1D / 1W / 1M / 1Y timeframes
+- [ ] Voice: "Show me Bitcoin this week"
 
 ---
 
-## Phase 5 — Infrastructure & Deployment
+## Phase 4 — Vision (Raspberry Pi 5)
 
-**Goal:** JARVIS runs locally for speed, with cloud as an always-on backup.
+**Goal:** JARVIS can see your desk and identify what's on it.
 
-### 5.1 Local-First Architecture
-- [ ] JARVIS runs on your Mac as a background service
-- [ ] `launchd` plist to auto-start on login
-- [ ] Local SQLite database for memory and conversation history
-- [ ] All voice processing (STT, wake word) stays local
+### 4.1 Hardware Setup
+- Raspberry Pi 5 with a camera module (Pi Camera v3 or USB webcam)
+- Runs a lightweight object detection model (YOLOv8-nano or similar)
+- Connects to the JARVIS backend over local network (HTTP or MQTT)
 
-### 5.2 FastAPI Backend
-- [ ] `jarvis/server.py` — FastAPI app
+### 4.2 Vision Server (`vision/server.py` — runs on the Pi)
+- [ ] Captures frames from the camera at configurable FPS
+- [ ] Runs YOLO inference on each frame
+- [ ] Sends detection results (object label + confidence + bounding box) to JARVIS backend
+- [ ] Optional: streams the annotated video feed for display in the HUD
+
+### 4.3 JARVIS Vision Tool
+- [ ] `look_at_desk()` — queries the Pi for current detections
+- [ ] Claude can call this tool when needed: "What's on my desk right now?"
+- [ ] JARVIS can proactively comment: "I notice your phone is on your desk"
+- [ ] Object list shown as a live overlay in the CAMERA mode panel
+
+### 4.4 Mode: CAMERA (HUD panel)
+- [ ] Shows the Pi camera feed with bounding box overlays
+- [ ] Object labels in HUD style (brackets + monospace text)
+- [ ] Detection log on the side: timestamp + object + confidence
+
+---
+
+## Phase 5 — Tools & Skills
+
+**Goal:** JARVIS can take real actions in the world.
+
+### 5.1 Tool Framework (`jarvis/tools/`)
+- [ ] Each tool: Python function + JSON schema for Claude's tool use API
+- [ ] Tool execution shown live in the TERMINAL panel
+- [ ] Claude decides which tools to call; JARVIS executes and returns results
+
+### 5.2 Information Tools
+- [ ] `web_search` — Brave Search API or SerpAPI
+- [ ] `get_news` — fetch latest RSS headlines by topic
+- [ ] `get_weather` — current + 5-day forecast (OpenWeatherMap)
+- [ ] `get_stock_price` — live price for any ticker
+- [ ] `get_market_summary` — snapshot of major indices
+
+### 5.3 System Tools
+- [ ] `get_time` — current time, timezone-aware
+- [ ] `set_timer` — countdown with audio alert
+- [ ] `open_app` — open a Mac app by name
+- [ ] `run_shell` — execute shell command (safety allowlist)
+- [ ] `take_screenshot` — capture screen, pass to Claude vision
+- [ ] `read_clipboard` / `write_clipboard`
+- [ ] `save_note` — append to a local markdown notes file
+
+### 5.4 Developer Tools
+- [ ] `read_file` / `write_file` — workspace file access
+- [ ] `git_status` — summarise current git state
+- [ ] `run_tests` — trigger local CI and stream results to TERMINAL panel
+- [ ] `search_codebase` — ripgrep the working directory
+
+### 5.5 Map Tools
+- [ ] `plan_route` — get directions between two places (Mapbox Directions API)
+- [ ] `show_location` — fly the map to a named place
+- [ ] `search_nearby` — find places of interest near a location
+
+### 5.6 Media Tools
+- [ ] `play_music` — Spotify playback control
+- [ ] `set_volume` — system volume
+- [ ] `show_news_stream` — switch HUD to news mode and load a specific channel
+
+---
+
+## Phase 6 — Infrastructure & Deployment
+
+**Goal:** JARVIS runs locally for speed, cloud for remote access.
+
+### 6.1 FastAPI Backend (`jarvis/server.py`)
+- [ ] `WS /stream` — WebSocket for real-time streaming to the frontend
 - [ ] `POST /chat` — text message endpoint
-- [ ] `WS /stream` — WebSocket for streaming responses to the frontend
-- [ ] `GET /status` — health check, returns active model, memory stats
-- [ ] `POST /voice` — receive audio blob, return transcription + response
+- [ ] `POST /voice` — receive audio blob, return transcription + streamed response
+- [ ] `GET /status` — health check, model info, memory stats
+- [ ] `POST /vision` — receive detection data from the Pi
 
-### 5.3 AWS Deployment (EC2 — already provisioned)
-- [ ] Deploy the FastAPI backend to the dev EC2 instance
-- [ ] Systemd service file for auto-restart
+### 6.2 Local Service (Mac)
+- [ ] `launchd` plist: JARVIS auto-starts on login
+- [ ] Backend runs on `localhost:8000`
+- [ ] Frontend served from `localhost:3000`
+
+### 6.3 EC2 Deploy (already provisioned)
+- [ ] Fill in the `app` job in `deploy.yml` — SCP build + systemd restart
 - [ ] Nginx reverse proxy + HTTPS (Let's Encrypt)
-- [ ] Remote access: JARVIS frontend accessible from any browser
-- [ ] Fill in the `app` job in `deploy.yml` with actual deploy steps (SCP + restart)
-
-### 5.4 Secrets Management
-- [ ] `ANTHROPIC_API_KEY` — already in GitHub secrets, needed in EC2 env too
-- [ ] `ELEVENLABS_API_KEY` — add to GitHub environment secrets
-- [ ] `.env` file on EC2, never committed to git
-- [ ] Gitleaks already enforces no secrets in code
+- [ ] Remote access: full JARVIS HUD accessible from any browser
+- [ ] Environment variables for all API keys (never committed)
 
 ---
 
-## Phase 6 — Polish & Advanced Features
+## Phase 7 — Proactive & Advanced
 
-**Goal:** JARVIS feels alive and complete.
+**Goal:** JARVIS acts without being asked. Feels alive.
 
-### 6.1 Proactive JARVIS
-- [ ] JARVIS can interrupt and speak without being asked (e.g. "Your 3pm meeting starts in 10 minutes")
-- [ ] Calendar integration (Google Calendar API)
-- [ ] Daily briefing: JARVIS summarises the day when you sit down at your desk
-- [ ] Threshold alerts: notify if an AWS resource is down
+### 7.1 Proactive Briefings
+- [ ] Morning briefing on first interaction: weather, calendar, news, markets
+- [ ] JARVIS speaks the briefing unprompted when you sit down (webcam presence detection)
+- [ ] "Good morning, sir. Markets are down 1.2%. You have two meetings today."
 
-### 6.2 Multi-Modal
-- [ ] JARVIS can see your screen (screenshot tool feeding into Claude's vision)
-- [ ] "What's wrong with this code?" — screenshot your editor, Claude analyses it
-- [ ] Webcam integration: JARVIS knows if you're at your desk
+### 7.2 Calendar Integration
+- [ ] Google Calendar API — read upcoming events
+- [ ] JARVIS reminds you 10 minutes before meetings
+- [ ] "Your 3pm call starts in 9 minutes."
 
-### 6.3 Fine-Tuned Voice
-- [ ] Record 30+ minutes of a target voice (or use ElevenLabs voice cloning)
-- [ ] Clone a custom "JARVIS voice" that sounds exactly right
-- [ ] Test and A/B different voice settings for naturalness
+### 7.3 AWS Monitoring
+- [ ] JARVIS watches the EC2 instances and alerts if one goes down
+- [ ] "Dev environment has been unreachable for 5 minutes."
 
-### 6.4 SOUL.md — JARVIS Identity File
-- [ ] Defines JARVIS's personality, rules, capabilities, and self-knowledge
-- [ ] Loaded into every conversation as part of the system prompt
-- [ ] Includes: who the user is, JARVIS's purpose, what it can and cannot do
-- [ ] Updated over time as JARVIS learns more about the user
+### 7.4 Custom JARVIS Voice
+- [ ] Fine-tune an ElevenLabs voice clone to match the movie character
+- [ ] Test multiple voice profiles — pick the one that feels right
 
 ---
 
-## Build Order (Suggested)
+## Build Order
 
 ```
-Week 1:  Phase 1 — Agent brain + CLI + memory (test everything works)
-Week 2:  Phase 2 — Voice pipeline (wake word + STT + TTS)
-Week 3:  Phase 3 — HUD frontend (the fun part)
-Week 4:  Phase 4 — Core tools (web search, shell, clipboard, notes)
-Week 5:  Phase 5 — Backend + EC2 deploy
-Week 6+: Phase 6 — Polish, advanced tools, Raspberry Pi
+Week 1:  Phase 1 — Agent brain + memory + CLI test harness
+Week 2:  Phase 2 — Wake word + STT + TTS voice loop
+Week 3:  Phase 3 — HUD shell + orb + home mode (conversation panel)
+Week 4:  Phase 3 — News mode + stock ticker + market chart
+Week 5:  Phase 3 — Map mode + Phase 5 core tools
+Week 6:  Phase 4 — Pi vision server + camera panel
+Week 7:  Phase 6 — EC2 deploy + Phase 5 remaining tools
+Week 8+: Phase 7 — Proactive briefings, calendar, polish
 ```
-
----
-
-## Open Questions
-
-- [ ] Local LLM vs Claude API? (Local = faster + offline, Claude = smarter)
-- [ ] ElevenLabs voice vs local TTS? (ElevenLabs = better quality, local = free + offline)
-- [ ] Mac-only or also support Linux/Windows?
-- [ ] Raspberry Pi kiosk: dedicated hardware or reuse existing Pi?
-- [ ] Wake word: "Hey JARVIS" (Porcupine) or always-on microphone?
 
 ---
 
 ## What Success Looks Like
 
-You sit down at your desk. JARVIS says *"Good morning. You have two meetings today and a pull request waiting for review."*
-You say *"Hey JARVIS, deploy to dev."*
-The HUD lights up. JARVIS responds: *"Initiating deployment to dev environment. Standing by."*
-The GitHub Actions workflow triggers. JARVIS reports back when it's done.
+You walk into your room. JARVIS detects you via the camera.
 
-That's the goal.
+*"Good morning. Markets opened down 1.4% — Bitcoin is holding above 60k.
+You have a call at 2pm and three pull requests waiting for review.
+There is also a coffee mug and what appears to be a Raspberry Pi on your desk."*
+
+You say: *"Hey JARVIS, show me the news."*
+
+The HUD switches to NEWS mode. Al Jazeera streams on the left.
+Headlines scroll on the right. The orb pulses softly in the corner.
+
+You say: *"Summarise the top story."*
+
+JARVIS reads it, condenses it, speaks it back.
+
+That is the goal.
