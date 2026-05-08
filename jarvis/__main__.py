@@ -6,11 +6,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-if not os.getenv("ANTHROPIC_API_KEY"):
-    print("Error: ANTHROPIC_API_KEY is not set. Copy .env.example to .env and add your key.")
+try:
+    from jarvis.secrets import get_secret
+    api_key = get_secret("ANTHROPIC_API_KEY")
+    os.environ["ANTHROPIC_API_KEY"] = api_key  # ensure the SDK picks it up
+except RuntimeError as e:
+    print(f"Error: {e}")
     sys.exit(1)
 
-from jarvis.agent import Agent  # noqa: E402 — import after env check
+from jarvis.agent import Agent  # noqa: E402 — import after secrets resolved
 
 
 BANNER = """
