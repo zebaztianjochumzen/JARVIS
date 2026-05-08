@@ -12,7 +12,7 @@ terraform {
   # The `key` is supplied dynamically by the deploy workflow per environment.
   backend "s3" {
     bucket         = "jarvis-terraform-state"
-    region         = "us-east-1"
+    region         = "eu-north-1"
     dynamodb_table = "jarvis-terraform-locks"
     encrypt        = true
   }
