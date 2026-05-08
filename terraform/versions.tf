@@ -8,12 +8,12 @@ terraform {
     }
   }
 
-  # Run bootstrap/ first to create this bucket and table, then `terraform init`.
+  # Run bootstrap/ first to create this bucket, then `terraform init`.
   # The `key` is supplied dynamically by the deploy workflow per environment.
   backend "s3" {
-    bucket         = "jarvis-terraform-state"
-    region         = "eu-north-1"
-    dynamodb_table = "jarvis-terraform-locks"
-    encrypt        = true
+    bucket       = "jarvis-tf-state-eun1"
+    region       = "eu-north-1"
+    use_lockfile = true
+    encrypt      = true
   }
 }
