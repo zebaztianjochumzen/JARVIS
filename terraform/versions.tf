@@ -8,13 +8,12 @@ terraform {
     }
   }
 
-  # Uncomment after running bootstrap/ to create the state bucket and lock table,
-  # then run: terraform init -migrate-state
-  # backend "s3" {
-  #   bucket         = "jarvis-terraform-state"
-  #   key            = "terraform.tfstate"
-  #   region         = "us-east-1"
-  #   dynamodb_table = "jarvis-terraform-locks"
-  #   encrypt        = true
-  # }
+  # Run bootstrap/ first to create this bucket and table, then `terraform init`.
+  # The `key` is supplied dynamically by the deploy workflow per environment.
+  backend "s3" {
+    bucket         = "jarvis-terraform-state"
+    region         = "us-east-1"
+    dynamodb_table = "jarvis-terraform-locks"
+    encrypt        = true
+  }
 }

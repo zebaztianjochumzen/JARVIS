@@ -5,9 +5,10 @@
 crash.log
 crash.*.log
 
-# tfvars may contain secrets — use *.tfvars.example for templates
+# tfvars may contain secrets — envs/ is safe (no credentials, only region/project vars)
 *.tfvars
 *.tfvars.json
+!terraform/envs/*.tfvars
 
 # Plan output files
 *tfplan*
