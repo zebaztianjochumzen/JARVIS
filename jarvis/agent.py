@@ -18,6 +18,7 @@ class Agent:
         self.client = anthropic.Anthropic()
         self.memory = Memory()
         self.soul = SOUL_PATH.read_text()
+        self.pending_actions: list[dict] = []
 
     def _system_prompt(self) -> str:
         facts = self.memory.get_all_facts()
@@ -60,8 +61,16 @@ class Agent:
                 final = stream.get_final_message()
 
             if final.stop_reason == "tool_use":
-                # Collect all tool use blocks from the response
-                assistant_content = [block.model_dump() for block in final.content]
+                # Strip SDK-only fields (e.g. parsed_output) that the API rejects
+                assistant_content = []
+                for block in final.content:
+                    b = block.model_dump()
+                    if b.get("type") == "text":
+                        assistant_content.append({"type": "text", "text": b["text"]})
+                    elif b.get("type") == "tool_use":
+                        assistant_content.append({"type": "tool_use", "id": b["id"], "name": b["name"], "input": b["input"]})
+                    else:
+                        assistant_content.append(b)
                 tool_uses = [b for b in assistant_content if b.get("type") == "tool_use"]
 
                 # Append assistant turn (may include partial text + tool use blocks)
@@ -70,7 +79,15 @@ class Agent:
                 # Execute each tool and build the results turn
                 tool_results = []
                 for tool in tool_uses:
-                    result = execute_tool(tool["name"], tool.get("input", {}), self.memory)
+                    result = execute_tool(tool["name"], tool.get("input", {}), self.memory, agent=self)
+                    import time as _time
+                    self.pending_actions.append({
+                        "type":   "tool_log",
+                        "tool":   tool["name"],
+                        "input":  tool.get("input", {}),
+                        "result": result,
+                        "ts":     _time.strftime("%H:%M:%S"),
+                    })
                     tool_results.append({
                         "type": "tool_result",
                         "tool_use_id": tool["id"],

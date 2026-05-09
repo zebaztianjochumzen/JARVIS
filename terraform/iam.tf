@@ -32,6 +32,9 @@ resource "aws_iam_role_policy" "read_secrets" {
       Resource = [
         aws_secretsmanager_secret.anthropic_api_key.arn,
         aws_secretsmanager_secret.elevenlabs_api_key.arn,
+        aws_secretsmanager_secret.spotify_client_id.arn,
+        aws_secretsmanager_secret.spotify_client_secret.arn,
+        aws_secretsmanager_secret.spotify_refresh_token.arn,
       ]
     }]
   })

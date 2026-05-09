@@ -9,8 +9,11 @@ AWS_REGION = os.getenv("AWS_REGION", "eu-north-1")
 
 # Maps each secret to its Secrets Manager path and local env-var fallback
 _SECRET_MAP: dict[str, tuple[str, str]] = {
-    "ANTHROPIC_API_KEY":  ("jarvis/{env}/anthropic-api-key", "ANTHROPIC_API_KEY"),
-    "ELEVENLABS_API_KEY": ("jarvis/{env}/elevenlabs-api-key", "ELEVENLABS_API_KEY"),
+    "ANTHROPIC_API_KEY":      ("jarvis/{env}/anthropic-api-key",      "ANTHROPIC_API_KEY"),
+    "ELEVENLABS_API_KEY":     ("jarvis/{env}/elevenlabs-api-key",      "ELEVENLABS_API_KEY"),
+    "SPOTIFY_CLIENT_ID":      ("jarvis/{env}/spotify-client-id",       "SPOTIFY_CLIENT_ID"),
+    "SPOTIFY_CLIENT_SECRET":  ("jarvis/{env}/spotify-client-secret",   "SPOTIFY_CLIENT_SECRET"),
+    "SPOTIFY_REFRESH_TOKEN":  ("jarvis/{env}/spotify-refresh-token",   "SPOTIFY_REFRESH_TOKEN"),
 }
 
 

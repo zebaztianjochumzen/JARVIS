@@ -132,6 +132,57 @@ async def get_news():
     return {"articles": articles[:30]}
 
 
+# ── Briefing endpoint ─────────────────────────────────────────────────────────
+
+@app.get("/api/briefing")
+async def get_briefing():
+    import requests as req
+    HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; JARVIS/1.0)"}
+    weather = {}
+    try:
+        r = req.get("https://wttr.in/Stockholm?format=j1", headers=HEADERS, timeout=6, verify=False)
+        w = r.json()
+        cc = w["current_condition"][0]
+        weather = {
+            "city":        "Stockholm",
+            "temp_c":      cc["temp_C"],
+            "feels_like":  cc["FeelsLikeC"],
+            "humidity":    cc["humidity"],
+            "wind_kmh":    cc["windspeedKmph"],
+            "description": cc["weatherDesc"][0]["value"],
+        }
+    except Exception:
+        pass
+    return {"weather": weather}
+
+
+# ── Spotify endpoints ─────────────────────────────────────────────────────────
+
+@app.get("/api/spotify/now-playing")
+async def spotify_now_playing():
+    try:
+        from jarvis.tools.spotify_client import now_playing
+        track = now_playing()
+        return {"track": track}
+    except Exception as e:
+        return {"track": None, "error": str(e)}
+
+
+@app.post("/api/spotify/control")
+async def spotify_control(body: dict):
+    action = body.get("action", "")
+    query  = body.get("query", "")
+    try:
+        from jarvis.tools.spotify_client import control, search_and_play
+        if action == "search" and query:
+            result = search_and_play(query)
+        else:
+            result = control(action)
+        return {"result": result}
+    except Exception as e:
+        return {"result": None, "error": str(e)}
+
+
 # ── WebSocket chat ─────────────────────────────────────────────────────────────
 
 @app.websocket("/ws")
@@ -159,6 +210,11 @@ async def websocket_endpoint(websocket: WebSocket):
                 await loop.run_in_executor(
                     None, lambda: agent.ask(user_message, stream_callback=on_token)
                 )
+                # Flush any side-channel actions (e.g. route data from plan_route tool)
+                for action in agent.pending_actions:
+                    await websocket.send_text(json.dumps(action))
+                agent.pending_actions.clear()
+
                 await websocket.send_text(json.dumps({"type": "done"}))
             except Exception as exc:
                 await websocket.send_text(json.dumps({"type": "error", "message": str(exc)}))
