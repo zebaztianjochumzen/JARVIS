@@ -4,6 +4,8 @@
   height: 100vh;
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ── Scan-line sweep ── */
@@ -69,7 +71,7 @@
   pointer-events: all;
 }
 
-/* ── Content area (between ticker and nav) ── */
+/* ── Content area (below ticker, full remaining height) ── */
 .content-area {
   flex: 1;
   position: relative;
@@ -80,8 +82,7 @@
 /* ── Panel wrappers ── */
 .panel-fill {
   position: absolute;
-  top: 0; left: 0; right: 0;
-  bottom: 52px; /* clear fixed nav bar */
+  top: 0; left: 0; right: 0; bottom: 0;
   overflow: hidden;
   transition: opacity 0.2s ease;
 }
@@ -90,10 +91,10 @@
   pointer-events: none;
 }
 
-/* ── Fixed orb (bottom-right, above nav) ── */
+/* ── Fixed orb (bottom-right) ── */
 .orb-fixed {
   position: fixed;
-  bottom: 60px;
+  bottom: 20px;
   right: 28px;
   transform: scale(0.42);
   transform-origin: bottom right;

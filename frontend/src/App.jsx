@@ -1,8 +1,7 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import GridBackground   from './components/GridBackground'
 import Orb              from './components/Orb'
 import Clock            from './components/Clock'
-import Chat, { timestamp } from './components/Chat'
 import BriefingPanel    from './components/BriefingPanel'
 import StocksPanel      from './components/StocksPanel'
 import NewsPanel        from './components/NewsPanel'
@@ -10,76 +9,119 @@ import MapPanel         from './components/MapPanel'
 import TerminalPanel    from './components/TerminalPanel'
 import MusicPanel       from './components/MusicPanel'
 import SettingsPanel    from './components/SettingsPanel'
-import CameraPanel     from './components/CameraPanel'
-import NavBar           from './components/NavBar'
+import CameraPanel      from './components/CameraPanel'
+import GestureOverlay   from './components/GestureOverlay'
+import VoiceControl     from './components/VoiceControl'
 import TickerBar        from './components/TickerBar'
+import TimerRing        from './components/TimerRing'
 import './App.css'
+
+const GESTURE_COMMANDS = {
+  swipe_right: 'Skip to the next Spotify track',
+  swipe_left:  'Go back to the previous Spotify track',
+  swipe_up:    'Turn the volume up',
+  swipe_down:  'Turn the volume down',
+}
 
 const WS_URL = 'ws://localhost:8000/ws'
 
 export default function App() {
-  const [active,   setActive]   = useState(false)
   const [tab,      setTab]      = useState('home')
-  const [messages, setMessages] = useState([])
   const [thinking, setThinking] = useState(false)
   const [speaking, setSpeaking] = useState(false)
   const [route,        setRoute]        = useState(null)
   const [showLocation, setShowLocation] = useState(null)
   const [toolLogs,     setToolLogs]     = useState([])
-  const wsRef = useRef(null)
+  const [activeTimer,   setActiveTimer]  = useState(null)
+  const [userSpeaking,  setUserSpeaking] = useState(false)
+  const wsRef              = useRef(null)
+  const gestureActiveRef   = useRef(false)
+  const pendingResponseRef = useRef('')
+  const audioRef           = useRef(null)
+  const msgHandlerRef      = useRef(null)
+
+  // Re-assigned every render so the live WS always calls the latest closure
+  msgHandlerRef.current = (e) => {
+    const data = JSON.parse(e.data)
+    if (data.type === 'token') {
+      pendingResponseRef.current += data.text
+      setThinking(false)
+      setSpeaking(true)
+    } else if (data.type === 'done') {
+      if (gestureActiveRef.current && pendingResponseRef.current) {
+        const text = pendingResponseRef.current.replace(/[*_`#>]/g, '').trim()
+        speakViaApi(text)
+      }
+      gestureActiveRef.current   = false
+      pendingResponseRef.current = ''
+      setSpeaking(false)
+      setThinking(false)
+    } else if (data.type === 'route') {
+      setRoute(data)
+      setTab('map')
+    } else if (data.type === 'show_location') {
+      setShowLocation(data)
+      setTab('map')
+    } else if (data.type === 'timer_set') {
+      setActiveTimer({
+        duration: data.duration_seconds,
+        label:    data.label || 'Timer',
+        endsAt:   Date.now() + data.duration_seconds * 1000,
+      })
+      setTab('home')
+    } else if (data.type === 'switch_tab') {
+      setTab(data.tab)
+    } else if (data.type === 'tool_log') {
+      setToolLogs(prev => [...prev, data])
+    } else if (data.type === 'error') {
+      setSpeaking(false)
+      setThinking(false)
+    }
+  }
+
+  useEffect(() => { connectWS() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  function speakViaApi(text) {
+    if (!text) return
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
+    fetch('http://localhost:8000/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    }).then(res => {
+      if (!res.ok) return
+      return res.blob()
+    }).then(blob => {
+      if (!blob) return
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      audioRef.current = audio
+      audio.onended = () => { URL.revokeObjectURL(url); audioRef.current = null }
+      audio.play()
+    }).catch(() => {})
+  }
 
   function connectWS(onOpen) {
     if (wsRef.current?.readyState === WebSocket.OPEN) { onOpen?.(); return }
+    if (wsRef.current?.readyState === WebSocket.CONNECTING) {
+      if (onOpen) wsRef.current.addEventListener('open', onOpen, { once: true })
+      return
+    }
     const ws = new WebSocket(WS_URL)
     ws.onopen = () => onOpen?.()
-    ws.onmessage = (e) => {
-      const data = JSON.parse(e.data)
-      if (data.type === 'token') {
-        setThinking(false)
-        setSpeaking(true)
-        setMessages(prev => {
-          const last = prev[prev.length - 1]
-          if (last?.role === 'assistant' && last.streaming) {
-            return [...prev.slice(0, -1), { ...last, content: last.content + data.text }]
-          }
-          return [...prev, { role: 'assistant', content: data.text, streaming: true, ts: timestamp() }]
-        })
-      } else if (data.type === 'done') {
-        setMessages(prev => {
-          const last = prev[prev.length - 1]
-          if (last?.streaming) return [...prev.slice(0, -1), { role: 'assistant', content: last.content, ts: last.ts }]
-          return prev
-        })
-        setSpeaking(false)
-        setThinking(false)
-      } else if (data.type === 'route') {
-        setRoute(data)
-        setTab('map')
-      } else if (data.type === 'show_location') {
-        setShowLocation(data)
-        setTab('map')
-      } else if (data.type === 'switch_tab') {
-        setTab(data.tab)
-      } else if (data.type === 'tool_log') {
-        setToolLogs(prev => [...prev, data])
-      } else if (data.type === 'error') {
-        setMessages(prev => [...prev, { role: 'assistant', content: `[Error: ${data.message}]`, ts: timestamp() }])
-        setSpeaking(false)
-        setThinking(false)
-      }
+    ws.onmessage = (e) => msgHandlerRef.current?.(e)
+    ws.onclose = () => {
+      wsRef.current = null
+      setTimeout(() => connectWS(), 3000)  // auto-reconnect
     }
-    ws.onclose = () => { wsRef.current = null }
     wsRef.current = ws
-  }
-
-  function handleOrbClick() {
-    if (!active) { setActive(true); connectWS() }
-    else setTab('home')
   }
 
   function handleSend(text) {
     const send = () => {
-      setMessages(prev => [...prev, { role: 'user', content: text, ts: timestamp() }])
       setThinking(true)
       setSpeaking(false)
       wsRef.current.send(JSON.stringify({ message: text }))
@@ -88,23 +130,57 @@ export default function App() {
     else send()
   }
 
-  function handleTabChange(t) {
-    if (!active) setActive(true)
-    setTab(t)
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) connectWS()
-  }
+  const handleNotUnderstood = useCallback(() => {
+    speakViaApi("I didn't get that, sir.")
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleInterrupt = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
+    setSpeaking(false)
+    setThinking(false)
+    gestureActiveRef.current   = false
+    pendingResponseRef.current = ''
+  }, [])
+
+  const handleVoiceCommand = useCallback((text) => {
+    if (!text) return
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+    setSpeaking(false)
+    setThinking(false)
+    gestureActiveRef.current   = true
+    pendingResponseRef.current = ''
+    handleSend(text)
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleGesture = useCallback((gesture) => {
+    const cmd = GESTURE_COMMANDS[gesture]
+    if (!cmd) return
+    gestureActiveRef.current   = true
+    pendingResponseRef.current = ''
+    handleSend(cmd)
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const panels = {
-    home:     (
-      <div style={{ display: 'flex', height: '100%' }}>
-        <div style={{ flex: '0 0 62%', minWidth: 0, borderRight: '1px solid rgba(0,100,200,0.12)' }}>
-          <Chat messages={messages} onSend={handleSend} thinking={thinking} />
+    home: (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 32 }}>
+        <div style={{ position: 'relative' }}>
+          <Orb thinking={thinking} speaking={speaking} userSpeaking={userSpeaking} />
+          {activeTimer && (
+            <TimerRing
+              duration={activeTimer.duration}
+              endsAt={activeTimer.endsAt}
+              label={activeTimer.label}
+              onComplete={() => { speakViaApi('Timer complete, sir.'); setActiveTimer(null) }}
+            />
+          )}
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <BriefingPanel />
-        </div>
+        <Clock />
       </div>
     ),
+    briefing: <BriefingPanel />,
     stocks:   <StocksPanel />,
     news:     <NewsPanel />,
     map:      <MapPanel visible={tab === 'map'} route={route} showLocation={showLocation} />,
@@ -116,39 +192,30 @@ export default function App() {
 
   return (
     <div className="app">
-      {/* HUD chrome */}
       <div className="scanline" />
       <div className="hud-corner tl" /><div className="hud-corner tr" />
       <div className="hud-corner bl" /><div className="hud-corner br" />
 
       <GridBackground />
+      <TickerBar />
 
-      {/* Idle */}
-      <div className={`idle-view${active ? ' idle-hidden' : ''}`}>
-        <Orb onClick={handleOrbClick} thinking={false} speaking={false} />
-        <Clock />
+      <div className="content-area">
+        {Object.entries(panels).map(([id, panel]) => (
+          <div key={id} className={`panel-fill${tab === id ? '' : ' hidden'}`}
+            style={{ display: 'flex', flexDirection: 'column' }}>
+            {panel}
+          </div>
+        ))}
       </div>
 
-      {/* Active */}
-      <div className={`active-view${active ? ' active-visible' : ''}`}>
-        <TickerBar />
-
-        <div className="content-area">
-          {Object.entries(panels).map(([id, panel]) => (
-            <div key={id} className={`panel-fill${tab === id ? '' : ' hidden'}`}
-              style={{ display: 'flex', flexDirection: 'column' }}>
-              {panel}
-            </div>
-          ))}
-        </div>
-
-        {/* Orb fixed bottom-right — always visible, click to go home */}
+      {tab !== 'home' && (
         <div className="orb-fixed">
-          <Orb onClick={handleOrbClick} thinking={thinking} speaking={speaking} />
+          <Orb onClick={() => setTab('home')} thinking={thinking} speaking={speaking} />
         </div>
-      </div>
+      )}
 
-      {active && <NavBar active={tab} onChange={handleTabChange} />}
+      <GestureOverlay onGesture={handleGesture} />
+      <VoiceControl   onCommand={handleVoiceCommand} onInterrupt={handleInterrupt} onNotUnderstood={handleNotUnderstood} onUserSpeaking={setUserSpeaking} />
     </div>
   )
 }

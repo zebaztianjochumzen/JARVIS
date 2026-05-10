@@ -59,11 +59,45 @@ def set_volume(level: int, agent=None) -> str:
 
 
 def show_news_stream(channel: str = "", agent=None) -> str:
-    """Switch the HUD to the news panel."""
+    """Switch the HUD to the news panel and return today's headlines for spoken summary."""
     if agent is not None:
-        agent.pending_actions.append({
-            "type":    "switch_tab",
-            "tab":     "news",
-            "channel": channel,
-        })
-    return f"Switching to news stream{': ' + channel if channel else ''}."
+        agent.pending_actions.append({"type": "switch_tab", "tab": "news"})
+    try:
+        from jarvis.tools.info import get_news
+        return get_news(num_articles=6)
+    except Exception as e:
+        return f"Switched to news. Could not fetch headlines: {e}"
+
+
+def show_stocks(agent=None) -> str:
+    """Switch the HUD to the stocks panel and return a market summary for spoken delivery."""
+    if agent is not None:
+        agent.pending_actions.append({"type": "switch_tab", "tab": "stocks"})
+    try:
+        from jarvis.tools.info import get_market_summary
+        return get_market_summary()
+    except Exception as e:
+        return f"Switched to stocks. Could not fetch data: {e}"
+
+
+def show_briefing(agent=None) -> str:
+    """Switch the HUD to the briefing panel and return weather + market snapshot."""
+    if agent is not None:
+        agent.pending_actions.append({"type": "switch_tab", "tab": "briefing"})
+    try:
+        from jarvis.tools.info import get_weather, get_market_summary
+        weather = get_weather()
+        markets = get_market_summary()
+        return f"{weather}\n\n{markets}"
+    except Exception as e:
+        return f"Switched to briefing. Could not fetch data: {e}"
+
+
+def navigate_to(tab: str, agent=None) -> str:
+    """Navigate the HUD to any named panel."""
+    valid = {"home", "briefing", "stocks", "news", "map", "terminal", "music", "camera", "settings"}
+    if tab not in valid:
+        return f"Unknown tab '{tab}'. Valid: {', '.join(sorted(valid))}"
+    if agent is not None:
+        agent.pending_actions.append({"type": "switch_tab", "tab": tab})
+    return f"Navigated to {tab}."

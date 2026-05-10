@@ -7,7 +7,7 @@ from jarvis.tools.info     import web_search, get_news, get_weather, get_stock_p
 from jarvis.tools.system   import set_timer, open_app, run_shell, take_screenshot, read_clipboard, write_clipboard
 from jarvis.tools.dev      import read_file, write_file, git_status, run_tests, search_codebase
 from jarvis.tools.map_tools import show_location, search_nearby
-from jarvis.tools.media    import play_music, set_volume, show_news_stream
+from jarvis.tools.media    import play_music, set_volume, show_news_stream, show_stocks, show_briefing, navigate_to
 
 # ── JSON schemas for Claude's tool use API ────────────────────────────────────
 TOOLS: list[dict] = [
@@ -279,11 +279,30 @@ TOOLS: list[dict] = [
     },
     {
         "name": "show_news_stream",
-        "description": "Switches the JARVIS HUD to the news panel.",
+        "description": "Switches the JARVIS HUD to the news panel AND fetches today's top headlines so you can summarise them verbally.",
         "input_schema": {
             "type": "object",
-            "properties": {"channel": {"type": "string", "description": "Optional channel name to mention."}},
+            "properties": {"channel": {"type": "string", "description": "Optional channel name."}},
             "required": [],
+        },
+    },
+    {
+        "name": "show_stocks",
+        "description": "Switches the JARVIS HUD to the stocks panel AND fetches a live market summary so you can read it out.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "show_briefing",
+        "description": "Switches the JARVIS HUD to the daily briefing panel AND fetches weather + market snapshot for spoken delivery.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "navigate_to",
+        "description": "Navigates the JARVIS HUD to any named panel. Use for music, camera, map, terminal, settings, or home.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"tab": {"type": "string", "description": "One of: home, briefing, stocks, news, map, terminal, music, camera, settings."}},
+            "required": ["tab"],
         },
     },
 ]
@@ -292,7 +311,8 @@ TOOLS: list[dict] = [
 _MEMORY_TOOLS = {"remember_this", "recall_fact", "forget_fact"}
 _AGENT_TOOLS  = {
     "plan_route", "look_at_desk",
-    "show_location", "search_nearby", "show_news_stream",
+    "show_location", "search_nearby",
+    "show_news_stream", "show_stocks", "show_briefing", "navigate_to",
     "play_music",
 }
 
@@ -327,17 +347,57 @@ _DISPATCH: dict = {
     "search_nearby":     search_nearby,
     # vision
     "look_at_desk":      look_at_desk,
-    # media
+    # media / navigation
     "play_music":        play_music,
     "set_volume":        set_volume,
     "show_news_stream":  show_news_stream,
+    "show_stocks":       show_stocks,
+    "show_briefing":     show_briefing,
+    "navigate_to":       navigate_to,
 }
 
 
-def execute_tool(name: str, tool_input: dict, memory: object, agent=None) -> str:
+# Auto-navigate to a panel whenever certain tools are called
+_TAB_FOR_TOOL: dict[str, str] = {
+    "get_news":           "news",
+    "show_news_stream":   "news",
+    "get_stock_price":    "stocks",
+    "get_market_summary": "stocks",
+    "show_stocks":        "stocks",
+    "get_weather":        "briefing",
+    "show_briefing":      "briefing",
+    "plan_route":         "map",
+    "show_location":      "map",
+    "search_nearby":      "map",
+    "look_at_desk":       "camera",
+}
+
+
+def execute_tool(name: str, tool_input: dict, memory: object, agent=None, action_callback=None) -> str:
     fn = _DISPATCH.get(name)
     if fn is None:
         return f"Unknown tool: {name}"
+
+    # Fire timer_set event so the UI can show a countdown
+    if name == 'set_timer' and 'duration_seconds' in tool_input:
+        timer_action = {
+            "type":             "timer_set",
+            "duration_seconds": tool_input["duration_seconds"],
+            "label":            tool_input.get("label", "Timer"),
+        }
+        if action_callback:
+            action_callback(timer_action)
+        elif agent is not None:
+            agent.pending_actions.append(timer_action)
+
+    # Fire switch_tab immediately via callback so the UI navigates during streaming
+    if name in _TAB_FOR_TOOL:
+        action = {"type": "switch_tab", "tab": _TAB_FOR_TOOL[name]}
+        if action_callback:
+            action_callback(action)
+        elif agent is not None:
+            agent.pending_actions.append(action)
+
     if name in _MEMORY_TOOLS:
         return fn(memory=memory, **tool_input)
     if name in _AGENT_TOOLS:

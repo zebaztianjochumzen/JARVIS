@@ -8,6 +8,7 @@ import asyncio
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse, JSONResponse
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -183,6 +184,34 @@ async def spotify_control(body: dict):
         return {"result": None, "error": str(e)}
 
 
+# ── TTS endpoint ──────────────────────────────────────────────────────────────
+
+TTS_VOICE = "en-US-GuyNeural"  # free Microsoft neural voice via edge-tts
+
+@app.post("/api/tts")
+async def text_to_speech(body: dict):
+    import edge_tts
+    import io
+
+    text = body.get("text", "").strip()
+    if not text:
+        return JSONResponse({"error": "no text"}, status_code=400)
+
+    voice = body.get("voice", TTS_VOICE)
+
+    async def _generate():
+        communicate = edge_tts.Communicate(text, voice)
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                yield chunk["data"]
+
+    return StreamingResponse(
+        _generate(),
+        media_type="audio/mpeg",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
 # ── WebSocket chat ─────────────────────────────────────────────────────────────
 
 @app.websocket("/ws")
@@ -206,10 +235,19 @@ async def websocket_endpoint(websocket: WebSocket):
                     loop,
                 )
 
-            try:
-                await loop.run_in_executor(
-                    None, lambda: agent.ask(user_message, stream_callback=on_token)
+            def on_action(action: dict):
+                print(f"[ACTION] {action}", flush=True)
+                asyncio.run_coroutine_threadsafe(
+                    websocket.send_text(json.dumps(action)),
+                    loop,
                 )
+
+            try:
+                print(f"[MSG] {user_message}", flush=True)
+                await loop.run_in_executor(
+                    None, lambda: agent.ask(user_message, stream_callback=on_token, action_callback=on_action)
+                )
+                print(f"[PENDING] {agent.pending_actions}", flush=True)
                 # Flush any side-channel actions (e.g. route data from plan_route tool)
                 for action in agent.pending_actions:
                     await websocket.send_text(json.dumps(action))

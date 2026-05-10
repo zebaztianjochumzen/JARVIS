@@ -48,15 +48,15 @@ function Waveform({ radius, size }) {
   )
 }
 
-export default function Orb({ onClick, thinking, speaking }) {
+export default function Orb({ onClick, thinking, speaking, userSpeaking }) {
   const SIZE   = 260
   const RADIUS = 100
 
   return (
     <div
-      className="orb-wrapper"
+      className={`orb-wrapper${speaking ? ' orb-bounce' : ''}${thinking ? ' orb-user-glow' : ''}${userSpeaking && !speaking ? ' orb-voice-active' : ''}`}
       onClick={onClick}
-      style={{ width: SIZE, height: SIZE, position: 'relative', cursor: 'pointer' }}
+      style={{ width: SIZE, height: SIZE, position: 'relative', cursor: onClick ? 'pointer' : 'default' }}
     >
       {/* Outer glow ring */}
       <div className={`orb-glow${thinking ? ' orb-thinking' : speaking ? ' orb-speaking' : ''}`} style={{

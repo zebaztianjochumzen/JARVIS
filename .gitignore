@@ -25,3 +25,4 @@ terraform.rc
 __pycache__/
 *.pyc
 .env
+models/*.task
