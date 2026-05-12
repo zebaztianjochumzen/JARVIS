@@ -22,3 +22,7 @@ override.tf.json
 # CLI config
 .terraformrc
 terraform.rc
+__pycache__/
+*.pyc
+.env
+models/*.task

@@ -1,0 +1,55 @@
+.orb-wrapper {
+  transition: transform 0.3s ease;
+}
+.orb-wrapper:hover .orb-glow {
+  box-shadow:
+    0 0 40px 16px rgba(0,180,255,0.6),
+    0 0 80px 32px rgba(0,100,255,0.35) !important;
+}
+.orb-wrapper.orb-bounce {
+  animation: orb-bounce 0.55s ease-in-out infinite alternate;
+}
+.orb-wrapper.orb-user-glow .orb-glow {
+  animation: orb-user-pulse 0.7s ease-in-out infinite !important;
+}
+.orb-wrapper.orb-voice-active {
+  animation: orb-voice-bounce 0.12s ease-in-out infinite alternate;
+}
+.orb-wrapper.orb-voice-active .orb-glow {
+  animation: orb-voice-glow 0.15s ease-in-out infinite alternate !important;
+}
+
+.orb-arc {
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.orb-arc-1 { animation-name: spin-cw;  animation-duration: 4s; }
+.orb-arc-2 { animation-name: spin-ccw; animation-duration: 7s; }
+
+.orb-arc-1.orb-fast { animation-duration: 0.9s; }
+.orb-arc-2.orb-fast { animation-duration: 1.6s; }
+
+.orb-glow { animation: pulse 3s ease-in-out infinite; }
+.orb-glow.orb-speaking { animation: pulse-fast 0.5s ease-in-out infinite; }
+
+@keyframes spin-cw  { from { transform: translate(-50%,-50%) rotate(0deg);    } to { transform: translate(-50%,-50%) rotate(360deg);  } }
+@keyframes spin-ccw { from { transform: translate(-50%,-50%) rotate(0deg);    } to { transform: translate(-50%,-50%) rotate(-360deg); } }
+@keyframes pulse      { 0%,100% { opacity:1; } 50% { opacity:0.75; } }
+@keyframes pulse-fast { 0%,100% { opacity:1; } 50% { opacity:0.6;  } }
+@keyframes wave-bar   { from { stroke-width:1; opacity:0.4; } to { stroke-width:3; opacity:1; } }
+@keyframes orb-bounce       { from { transform: scale(1); } to { transform: scale(1.07); } }
+@keyframes orb-voice-bounce { from { transform: scale(1); } to { transform: scale(1.035); } }
+@keyframes orb-voice-glow {
+  from { box-shadow: 0 0 30px 10px rgba(0,220,160,0.35), 0 0 60px 24px rgba(0,180,120,0.2); }
+  to   { box-shadow: 0 0 55px 22px rgba(0,240,180,0.65), 0 0 100px 44px rgba(0,200,140,0.4); }
+}
+@keyframes orb-user-pulse {
+  0%,100% {
+    box-shadow: 0 0 40px 14px rgba(0,200,255,0.55), 0 0 90px 36px rgba(0,100,255,0.3);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 70px 28px rgba(0,220,255,0.85), 0 0 130px 60px rgba(0,120,255,0.55);
+    opacity: 1;
+  }
+}

@@ -88,6 +88,7 @@ resource "aws_instance" "main" {
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.instance.id]
+  iam_instance_profile   = aws_iam_instance_profile.ec2.name
 
   tags = { Name = "${var.project_name}-${var.environment}" }
 }

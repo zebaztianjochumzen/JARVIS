@@ -1,0 +1,103 @@
+/* ── Reset ── */
+.app {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Scan-line sweep ── */
+.scanline {
+  position: fixed;
+  left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(to right, transparent, rgba(0,180,255,0.08), transparent);
+  pointer-events: none;
+  z-index: 9999;
+  animation: scanline-sweep 10s linear infinite;
+}
+@keyframes scanline-sweep {
+  0%   { top: -2px; opacity: 0; }
+  5%   { opacity: 1; }
+  95%  { opacity: 1; }
+  100% { top: 100vh; opacity: 0; }
+}
+
+/* ── HUD corner brackets ── */
+.hud-corner {
+  position: fixed;
+  width: 22px;
+  height: 22px;
+  pointer-events: none;
+  z-index: 9998;
+}
+.hud-corner.tl { top: 10px; left: 10px; border-top: 1.5px solid rgba(80,180,255,0.4); border-left: 1.5px solid rgba(80,180,255,0.4); }
+.hud-corner.tr { top: 10px; right: 10px; border-top: 1.5px solid rgba(80,180,255,0.4); border-right: 1.5px solid rgba(80,180,255,0.4); }
+.hud-corner.bl { bottom: 10px; left: 10px; border-bottom: 1.5px solid rgba(80,180,255,0.4); border-left: 1.5px solid rgba(80,180,255,0.4); }
+.hud-corner.br { bottom: 10px; right: 10px; border-bottom: 1.5px solid rgba(80,180,255,0.4); border-right: 1.5px solid rgba(80,180,255,0.4); }
+
+/* ── Idle view ── */
+.idle-view {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.idle-view.idle-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.9);
+}
+
+/* ── Active view ── */
+.active-view {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  z-index: 2;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s ease;
+}
+.active-view.active-visible {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* ── Content area (below ticker, full remaining height) ── */
+.content-area {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Panel wrappers ── */
+.panel-fill {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  overflow: hidden;
+  transition: opacity 0.2s ease;
+}
+.panel-fill.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Fixed orb (bottom-right) ── */
+.orb-fixed {
+  position: fixed;
+  bottom: 20px;
+  right: 28px;
+  transform: scale(0.42);
+  transform-origin: bottom right;
+  z-index: 500;
+  cursor: pointer;
+}

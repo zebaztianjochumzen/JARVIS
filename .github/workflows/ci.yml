@@ -79,3 +79,73 @@ jobs:
 
       - name: Run pylint
         run: pylint .github/scripts/ --fail-under=8.0
+
+  # ── 5. Python security (bandit) ───────────────────────────────────────────
+  bandit:
+    name: Python security (bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install bandit
+        run: pip install bandit
+
+      - name: Run bandit
+        run: bandit -r .github/scripts/ -ll
+
+  # ── 6. Python type checking (mypy) ───────────────────────────────────────
+  mypy:
+    name: Python type check (mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install mypy anthropic
+
+      - name: Run mypy
+        run: mypy .github/scripts/ --ignore-missing-imports --disallow-untyped-defs --warn-redundant-casts
+
+  # ── 7. Shell script checks (shellcheck) ──────────────────────────────────
+  shellcheck:
+    name: Shell script checks (shellcheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Run shellcheck
+        run: shellcheck .github/smoke-tests/*.sh
+
+  # ── 8. IaC deep scan (checkov) ───────────────────────────────────────────
+  checkov:
+    name: IaC deep scan (checkov)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install checkov
+        run: pip install checkov
+
+      - name: Scan terraform/
+        run: checkov -d terraform/ --quiet --soft-fail
+
+      - name: Scan bootstrap/
+        run: checkov -d bootstrap/ --quiet --soft-fail
+
+      - name: Scan GitHub Actions workflows
+        run: checkov -d .github/workflows/ --quiet --soft-fail
