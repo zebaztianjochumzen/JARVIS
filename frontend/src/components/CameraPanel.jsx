@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 
-const VISION_URL = 'http://localhost:8001'
+const VISION_URL = 'http://localhost:8000/vision'
 
 const mono  = { fontFamily: "'Share Tech Mono', monospace" }
 const raj   = { fontFamily: "'Rajdhani', sans-serif" }
@@ -143,13 +143,10 @@ export default function CameraPanel({ visible }) {
             ◉  VISION SERVER OFFLINE
           </div>
           <div style={{ ...mono, fontSize: 10, color: 'rgba(100,140,180,0.35)', lineHeight: 2.2, textAlign: 'center' }}>
-            Start with:<br />
+            Restart the backend — vision loads automatically.<br />
             <span style={{ color: 'rgba(79,195,247,0.55)' }}>
-              uvicorn vision.server:app --port 8001
+              uvicorn api.main:app --reload --port 8000
             </span>
-          </div>
-          <div style={{ ...mono, fontSize: 9, color: 'rgba(100,140,180,0.22)' }}>
-            pip install ultralytics opencv-python
           </div>
         </div>
       )}

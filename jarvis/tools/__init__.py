@@ -4,10 +4,13 @@ from jarvis.tools.basic    import get_current_time, save_note, remember_this, re
 from jarvis.tools.routing  import plan_route
 from jarvis.tools.vision   import look_at_desk
 from jarvis.tools.info     import web_search, get_news, get_weather, get_stock_price, get_market_summary
-from jarvis.tools.system   import set_timer, open_app, run_shell, take_screenshot, read_clipboard, write_clipboard
+from jarvis.tools.system   import set_timer, open_app, open_url, run_shell, take_screenshot, read_clipboard, write_clipboard
 from jarvis.tools.dev      import read_file, write_file, git_status, run_tests, search_codebase
 from jarvis.tools.map_tools import show_location, search_nearby
 from jarvis.tools.media    import play_music, set_volume, show_news_stream, show_stocks, show_briefing, navigate_to
+from jarvis.tools.files    import list_files, find_file, open_file, get_file_info, move_file, delete_file
+from jarvis.tools.creator  import create_document, draft_email, translate, detect_language, generate_html, write_code
+from jarvis.tools.calendar_tool import get_calendar_events, create_calendar_event, delete_calendar_event, show_calendar
 
 # ── JSON schemas for Claude's tool use API ────────────────────────────────────
 TOOLS: list[dict] = [
@@ -127,6 +130,18 @@ TOOLS: list[dict] = [
             "type": "object",
             "properties": {"app_name": {"type": "string", "description": "Exact macOS app name."}},
             "required": ["app_name"],
+        },
+    },
+    {
+        "name": "open_url",
+        "description": "Opens a URL or website in Chrome. Supports shortcuts: youtube, gmail, google, github, reddit, spotify, netflix, chatgpt, linkedin, twitter.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "url":     {"type": "string", "description": "Full URL or shortcut name like 'youtube'."},
+                "browser": {"type": "string", "description": "Browser app name (default: Google Chrome)."},
+            },
+            "required": ["url"],
         },
     },
     {
@@ -305,6 +320,196 @@ TOOLS: list[dict] = [
             "required": ["tab"],
         },
     },
+
+    # ── Files ──────────────────────────────────────────────────────────────────
+    {
+        "name": "list_files",
+        "description": "Lists files and folders in a directory on the user's Mac.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "directory": {"type": "string", "description": "Directory path (default: home ~). Use ~ for shortcuts like ~/Desktop."},
+                "pattern":   {"type": "string", "description": "Glob pattern filter, e.g. '*.pdf' (default: all)."},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "find_file",
+        "description": "Searches for files by name pattern under a directory.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name":        {"type": "string", "description": "Filename or glob pattern, e.g. '*.pdf' or 'report*.docx'."},
+                "search_path": {"type": "string", "description": "Root directory to search (default: ~)."},
+            },
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "open_file",
+        "description": "Opens a file or folder with the default macOS application.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"path": {"type": "string", "description": "Full or ~ path to the file."}},
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "get_file_info",
+        "description": "Returns metadata about a file: type, size, creation and modification dates.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"path": {"type": "string", "description": "Path to the file."}},
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "move_file",
+        "description": "Moves or renames a file or folder.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "source":      {"type": "string", "description": "Current path."},
+                "destination": {"type": "string", "description": "New path or directory."},
+            },
+            "required": ["source", "destination"],
+        },
+    },
+    {
+        "name": "delete_file",
+        "description": "Moves a file to the macOS Trash (safe, recoverable).",
+        "input_schema": {
+            "type": "object",
+            "properties": {"path": {"type": "string", "description": "Path to the file to trash."}},
+            "required": ["path"],
+        },
+    },
+
+    # ── Calendar ───────────────────────────────────────────────────────────────
+    {
+        "name": "show_calendar",
+        "description": "Navigate the HUD to the calendar panel and return today's events for spoken delivery. Use when user asks about their schedule, meetings, or what's on today.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "days_ahead": {"type": "integer", "description": "How many days ahead to show (default 1 = today only)."},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "get_calendar_events",
+        "description": "Fetch upcoming Google Calendar events without navigating. Use for quick lookups or when already on the calendar panel.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "days_ahead":   {"type": "integer", "description": "Number of days ahead to fetch (default 1)."},
+                "max_results":  {"type": "integer", "description": "Max events to return (default 15)."},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "create_calendar_event",
+        "description": "Create a new event in Google Calendar. Start and end times must be ISO 8601 format (e.g. 2026-05-12T14:00:00).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title":       {"type": "string", "description": "Event title."},
+                "start_time":  {"type": "string", "description": "Start time in ISO 8601."},
+                "end_time":    {"type": "string", "description": "End time in ISO 8601."},
+                "description": {"type": "string", "description": "Optional event description."},
+                "location":    {"type": "string", "description": "Optional location."},
+            },
+            "required": ["title", "start_time", "end_time"],
+        },
+    },
+    {
+        "name": "delete_calendar_event",
+        "description": "Delete a Google Calendar event by its event ID.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "event_id": {"type": "string", "description": "The Google Calendar event ID."},
+            },
+            "required": ["event_id"],
+        },
+    },
+
+    # ── Creator ────────────────────────────────────────────────────────────────
+    {
+        "name": "create_document",
+        "description": "Creates a text, markdown, HTML, or code file on the Desktop with the given content and opens it.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "filename":  {"type": "string", "description": "Filename without extension, e.g. 'meeting_notes'."},
+                "content":   {"type": "string", "description": "Full file content."},
+                "file_type": {"type": "string", "description": "Type: txt, md, html, py, js, css (default: txt)."},
+            },
+            "required": ["filename", "content"],
+        },
+    },
+    {
+        "name": "draft_email",
+        "description": "Opens Apple Mail with a pre-filled email draft ready to send.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "to":      {"type": "string", "description": "Recipient email address."},
+                "subject": {"type": "string", "description": "Email subject."},
+                "body":    {"type": "string", "description": "Email body text."},
+            },
+            "required": ["to", "subject", "body"],
+        },
+    },
+    {
+        "name": "translate",
+        "description": "Translates text to a target language using Claude AI.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "text":            {"type": "string", "description": "Text to translate."},
+                "target_language": {"type": "string", "description": "Target language, e.g. 'Swedish', 'Spanish', 'French'."},
+            },
+            "required": ["text", "target_language"],
+        },
+    },
+    {
+        "name": "detect_language",
+        "description": "Detects the language of a piece of text.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"text": {"type": "string", "description": "Text to identify."}},
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "generate_html",
+        "description": "Generates a complete HTML page from a description, saves it to the Desktop, and opens it in the browser.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "description": {"type": "string", "description": "What the HTML page should contain or do."},
+                "filename":    {"type": "string", "description": "Output filename without .html extension (default: jarvis_page)."},
+            },
+            "required": ["description"],
+        },
+    },
+    {
+        "name": "write_code",
+        "description": "Generates code from a description, saves it to the Desktop, and opens it.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "description": {"type": "string", "description": "What the code should do."},
+                "filename":    {"type": "string", "description": "Output filename without extension."},
+                "language":    {"type": "string", "description": "Programming language: python, js, html, css (default: python)."},
+            },
+            "required": ["description", "filename"],
+        },
+    },
 ]
 
 # ── Dispatch ──────────────────────────────────────────────────────────────────
@@ -314,6 +519,10 @@ _AGENT_TOOLS  = {
     "show_location", "search_nearby",
     "show_news_stream", "show_stocks", "show_briefing", "navigate_to",
     "play_music",
+    "list_files", "find_file", "open_file", "get_file_info", "move_file", "delete_file",
+    "open_url", "open_app",
+    "create_document", "draft_email", "translate", "detect_language", "generate_html", "write_code",
+    "show_calendar", "get_calendar_events", "create_calendar_event", "delete_calendar_event",
 }
 
 _DISPATCH: dict = {
@@ -354,6 +563,27 @@ _DISPATCH: dict = {
     "show_stocks":       show_stocks,
     "show_briefing":     show_briefing,
     "navigate_to":       navigate_to,
+    # files
+    "list_files":        list_files,
+    "find_file":         find_file,
+    "open_file":         open_file,
+    "get_file_info":     get_file_info,
+    "move_file":         move_file,
+    "delete_file":       delete_file,
+    # calendar
+    "show_calendar":          show_calendar,
+    "get_calendar_events":    get_calendar_events,
+    "create_calendar_event":  create_calendar_event,
+    "delete_calendar_event":  delete_calendar_event,
+    # creator
+    "create_document":   create_document,
+    "draft_email":       draft_email,
+    "translate":         translate,
+    "detect_language":   detect_language,
+    "generate_html":     generate_html,
+    "write_code":        write_code,
+    # web
+    "open_url":          open_url,
 }
 
 
@@ -370,6 +600,8 @@ _TAB_FOR_TOOL: dict[str, str] = {
     "show_location":      "map",
     "search_nearby":      "map",
     "look_at_desk":       "camera",
+    "show_calendar":      "calendar",
+    "get_calendar_events":"calendar",
 }
 
 
@@ -401,5 +633,17 @@ def execute_tool(name: str, tool_input: dict, memory: object, agent=None, action
     if name in _MEMORY_TOOLS:
         return fn(memory=memory, **tool_input)
     if name in _AGENT_TOOLS:
-        return fn(agent=agent, **tool_input)
-    return fn(**tool_input)
+        result = fn(agent=agent, **tool_input)
+    else:
+        result = fn(**tool_input)
+
+    # open_url returns the resolved URL — send it to the HUD browser panel
+    if name == "open_url":
+        action = {"type": "show_browser", "url": result}
+        if action_callback:
+            action_callback(action)
+        elif agent is not None:
+            agent.pending_actions.append(action)
+        return f"Opening {result} in the JARVIS browser."
+
+    return result

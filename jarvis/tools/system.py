@@ -38,6 +38,28 @@ def open_app(app_name: str, agent=None) -> str:
         return f"open_app failed: {e}"
 
 
+URL_SHORTCUTS = {
+    "youtube":  "https://youtube.com",
+    "gmail":    "https://mail.google.com",
+    "google":   "https://google.com",
+    "github":   "https://github.com",
+    "reddit":   "https://old.reddit.com",
+    "twitter":  "https://twitter.com",
+    "linkedin": "https://linkedin.com",
+    "spotify":  "https://open.spotify.com",
+    "netflix":  "https://netflix.com",
+    "chatgpt":  "https://chat.openai.com",
+    "wikipedia": "https://wikipedia.org",
+}
+
+def open_url(url: str, agent=None) -> str:
+    """Resolve and return the URL for the JARVIS integrated browser."""
+    resolved = URL_SHORTCUTS.get(url.lower().strip(), url)
+    if not resolved.startswith(("http://", "https://")):
+        resolved = f"https://{resolved}"
+    return resolved
+
+
 def run_shell(command: str, agent=None) -> str:
     cmd_name = command.strip().split()[0]
     if cmd_name not in SHELL_ALLOWLIST:

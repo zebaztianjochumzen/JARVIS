@@ -14,6 +14,8 @@ import GestureOverlay   from './components/GestureOverlay'
 import VoiceControl     from './components/VoiceControl'
 import TickerBar        from './components/TickerBar'
 import TimerRing        from './components/TimerRing'
+import BrowserPanel     from './components/BrowserPanel'
+import CalendarPanel    from './components/CalendarPanel'
 import './App.css'
 
 const GESTURE_COMMANDS = {
@@ -34,6 +36,7 @@ export default function App() {
   const [toolLogs,     setToolLogs]     = useState([])
   const [activeTimer,   setActiveTimer]  = useState(null)
   const [userSpeaking,  setUserSpeaking] = useState(false)
+  const [browserUrl,    setBrowserUrl]   = useState('')
   const wsRef              = useRef(null)
   const gestureActiveRef   = useRef(false)
   const pendingResponseRef = useRef('')
@@ -69,6 +72,9 @@ export default function App() {
         endsAt:   Date.now() + data.duration_seconds * 1000,
       })
       setTab('home')
+    } else if (data.type === 'show_browser') {
+      setBrowserUrl(data.url)
+      setTab('browser')
     } else if (data.type === 'switch_tab') {
       setTab(data.tab)
     } else if (data.type === 'tool_log') {
@@ -143,6 +149,10 @@ export default function App() {
     setThinking(false)
     gestureActiveRef.current   = false
     pendingResponseRef.current = ''
+    // Tell the backend to stop streaming immediately
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'interrupt' }))
+    }
   }, [])
 
   const handleVoiceCommand = useCallback((text) => {
@@ -185,6 +195,8 @@ export default function App() {
     news:     <NewsPanel />,
     map:      <MapPanel visible={tab === 'map'} route={route} showLocation={showLocation} />,
     terminal: <TerminalPanel logs={toolLogs} />,
+    calendar: <CalendarPanel />,
+    browser:  <BrowserPanel url={browserUrl} />,
     music:    <MusicPanel />,
     camera:   <CameraPanel visible={tab === 'camera'} />,
     settings: <SettingsPanel />,

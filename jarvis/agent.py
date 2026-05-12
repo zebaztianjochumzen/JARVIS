@@ -8,17 +8,19 @@ import anthropic
 from jarvis.memory import Memory
 from jarvis.tools import TOOLS, execute_tool
 
-SOUL_PATH = Path(__file__).parent.parent / "SOUL.md"
-MODEL = "claude-sonnet-4-6"
+AGENT_PATH = Path(__file__).parent.parent / "AGENT.md"
+SOUL_PATH  = Path(__file__).parent.parent / "SOUL.md"   # fallback
+MODEL      = "claude-sonnet-4-6"
 MAX_HISTORY = 20
 
 
 class Agent:
     def __init__(self) -> None:
-        self.client = anthropic.Anthropic()
-        self.memory = Memory()
-        self.soul = SOUL_PATH.read_text()
+        self.client  = anthropic.Anthropic()
+        self.memory  = Memory()
+        self.soul    = (AGENT_PATH if AGENT_PATH.exists() else SOUL_PATH).read_text()
         self.pending_actions: list[dict] = []
+        self._cancelled = False
 
     def _system_prompt(self) -> str:
         facts = self.memory.get_all_facts()
@@ -36,8 +38,13 @@ class Agent:
         self.memory.append_message("assistant", response_text)
         return response_text
 
+    def cancel(self):
+        """Signal the current streaming response to stop."""
+        self._cancelled = True
+
     def _run(self, messages: list[dict[str, str]], stream_callback=None, action_callback=None) -> str:
         """Stream a response, executing tool calls until a final text reply is produced."""
+        self._cancelled = False
         msg_list: list[dict] = list(messages)
 
         while True:
@@ -52,6 +59,8 @@ class Agent:
                 messages=msg_list,
             ) as stream:
                 for text in stream.text_stream:
+                    if self._cancelled:
+                        break
                     if stream_callback:
                         stream_callback(text)
                     else:
@@ -59,6 +68,9 @@ class Agent:
                     full_text += text
 
                 final = stream.get_final_message()
+
+            if self._cancelled:
+                return full_text
 
             if final.stop_reason == "tool_use":
                 # Strip SDK-only fields (e.g. parsed_output) that the API rejects

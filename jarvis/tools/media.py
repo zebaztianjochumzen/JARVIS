@@ -95,7 +95,7 @@ def show_briefing(agent=None) -> str:
 
 def navigate_to(tab: str, agent=None) -> str:
     """Navigate the HUD to any named panel."""
-    valid = {"home", "briefing", "stocks", "news", "map", "terminal", "music", "camera", "settings"}
+    valid = {"home", "briefing", "stocks", "news", "map", "terminal", "music", "camera", "settings", "browser", "calendar"}
     if tab not in valid:
         return f"Unknown tab '{tab}'. Valid: {', '.join(sorted(valid))}"
     if agent is not None:

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 
-const VISION_WS = 'ws://localhost:8001/ws/gestures'
-const VISION_URL = 'http://localhost:8001'
+const VISION_WS  = 'ws://localhost:8000/vision/ws/gestures'
+const VISION_URL = 'http://localhost:8000/vision'
 
 const mono = { fontFamily: "'Share Tech Mono', monospace" }
 const raj  = { fontFamily: "'Rajdhani', sans-serif" }
