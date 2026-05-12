@@ -2,7 +2,6 @@
 """Auto-generates documentation.md by sending repo files to the Claude API."""
 
 import glob
-import os
 import anthropic
 
 FILE_PATTERNS = [
@@ -14,20 +13,20 @@ FILE_PATTERNS = [
 
 
 def collect_files() -> dict[str, str]:
-    files = {}
+    result: dict[str, str] = {}
     for pattern in FILE_PATTERNS:
         for path in sorted(glob.glob(pattern, recursive=True)):
-            with open(path) as f:
-                files[path] = f.read()
-    return files
+            with open(path, encoding="utf-8") as fh:
+                result[path] = fh.read()
+    return result
 
 
-def generate_docs(files: dict[str, str]) -> str:
+def generate_docs(file_map: dict[str, str]) -> str:
     client = anthropic.Anthropic()
 
     files_block = "\n\n".join(
         f'<file path="{path}">\n{content}\n</file>'
-        for path, content in files.items()
+        for path, content in file_map.items()
     )
 
     response = client.messages.create(
@@ -54,8 +53,10 @@ def generate_docs(files: dict[str, str]) -> str:
                             "1. **Project Overview** — what JARVIS is and its purpose\n"
                             "2. **Repository Structure** — annotated directory tree\n"
                             "3. **Infrastructure** — every AWS resource, what it creates and why\n"
-                            "4. **GitHub Actions Workflows** — each workflow, trigger, and what it does step by step\n"
-                            "5. **Deployment Guide** — bootstrap → deploy dev → verify → merge → deploy production\n"
+                            "4. **GitHub Actions Workflows** — each workflow, trigger, and what it"
+                            " does step by step\n"
+                            "5. **Deployment Guide** — bootstrap → deploy dev → verify → merge"
+                            " → deploy production\n"
                             "6. **Environment Configuration** — how dev and production differ\n\n"
                             "Write only the documentation.md content, no preamble."
                         ),
@@ -65,13 +66,16 @@ def generate_docs(files: dict[str, str]) -> str:
         ],
     )
 
-    return response.content[0].text
+    block = response.content[0]
+    if not isinstance(block, anthropic.types.TextBlock):
+        raise ValueError(f"Unexpected response block type: {type(block)}")
+    return block.text
 
 
 if __name__ == "__main__":
-    files = collect_files()
-    print(f"Collected {len(files)} files: {', '.join(files)}")
-    docs = generate_docs(files)
-    with open("documentation.md", "w") as f:
-        f.write(docs)
+    collected = collect_files()
+    print(f"Collected {len(collected)} files: {', '.join(collected)}")
+    docs = generate_docs(collected)
+    with open("documentation.md", "w", encoding="utf-8") as out:
+        out.write(docs)
     print("documentation.md written successfully")
