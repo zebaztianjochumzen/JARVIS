@@ -28,13 +28,23 @@ resource "aws_iam_role_policy" "read_secrets" {
       Action = [
         "secretsmanager:GetSecretValue",
         "secretsmanager:DescribeSecret",
+        "secretsmanager:PutSecretValue",   # needed for Google token rotation
       ]
       Resource = [
+        # Core AI
         aws_secretsmanager_secret.anthropic_api_key.arn,
+        # Voice
         aws_secretsmanager_secret.elevenlabs_api_key.arn,
+        # Music
         aws_secretsmanager_secret.spotify_client_id.arn,
         aws_secretsmanager_secret.spotify_client_secret.arn,
         aws_secretsmanager_secret.spotify_refresh_token.arn,
+        # Reach & Integration (Phase C)
+        aws_secretsmanager_secret.telegram_bot_token.arn,
+        # Google APIs
+        aws_secretsmanager_secret.google_oauth_credentials.arn,
+        aws_secretsmanager_secret.google_calendar_token.arn,
+        aws_secretsmanager_secret.google_gmail_token.arn,
       ]
     }]
   })

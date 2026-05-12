@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(pip install *)",
+      "Bash(python -c \"from jarvis.tools.gmail_tool import read_gmail_inbox, search_gmail, gmail_triage; print\\('Gmail tools: OK'\\)\")",
+      "Bash(python -c \"from jarvis.voice.stt import transcribe_bytes; print\\('STT import: OK'\\)\")",
+      "Bash(python -c \"from jarvis.voice.wakeword import start, add_listener; print\\('WakeWord import: OK'\\)\")",
+      "Bash(python -c \"from jarvis.tools import TOOLS; gmail_tools = [t['name'] for t in TOOLS if 'gmail' in t['name']]; print\\('Gmail in registry:', gmail_tools\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"import mcp; print\\('mcp:', mcp.__version__\\)\")",
+      "Bash(python -c \"import playwright; print\\('playwright: ok'\\)\")",
+      "Bash(python -c \"import telebot; print\\('telebot: ok'\\)\")",
+      "Bash(python -m playwright install chromium)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\baske\\\\OneDrive\\\\Skrivbord\\\\Repo\\\\JARVIS\\\\frontend\\\\src\\\\components\" -Name)"
+    ]
+  }
+}

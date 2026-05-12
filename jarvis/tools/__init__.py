@@ -1,6 +1,6 @@
 """Tool registry — exposes TOOLS list and execute_tool() to the agent."""
 
-from jarvis.tools.basic    import get_current_time, save_note, remember_this, recall_fact, forget_fact
+from jarvis.tools.basic    import get_current_time, save_note, remember_this, recall_fact, forget_fact, recall_semantic
 from jarvis.tools.routing  import plan_route
 from jarvis.tools.vision   import look_at_desk
 from jarvis.tools.info     import web_search, get_news, get_weather, get_stock_price, get_market_summary
@@ -11,6 +11,12 @@ from jarvis.tools.media    import play_music, set_volume, show_news_stream, show
 from jarvis.tools.files    import list_files, find_file, open_file, get_file_info, move_file, delete_file
 from jarvis.tools.creator  import create_document, draft_email, translate, detect_language, generate_html, write_code
 from jarvis.tools.calendar_tool import get_calendar_events, create_calendar_event, delete_calendar_event, show_calendar
+from jarvis.tools.gmail_tool    import read_gmail_inbox, search_gmail, gmail_triage
+from jarvis.tools.browser_tool  import (
+    browser_navigate, browser_extract_text, browser_click,
+    browser_fill, browser_screenshot, browser_execute_js,
+)
+from jarvis.tools.system_vitals import get_system_vitals
 
 # ── JSON schemas for Claude's tool use API ────────────────────────────────────
 TOOLS: list[dict] = [
@@ -58,6 +64,21 @@ TOOLS: list[dict] = [
             "type": "object",
             "properties": {"key": {"type": "string"}},
             "required": ["key"],
+        },
+    },
+    {
+        "name": "recall_semantic",
+        "description": (
+            "Search memory by MEANING rather than exact key. Use this when the user asks "
+            "something like 'what do you know about my work' or 'anything related to music' "
+            "and you are not sure of the exact fact key. Returns the most relevant stored facts."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Natural-language description of what to search for."},
+            },
+            "required": ["query"],
         },
     },
 
@@ -437,6 +458,106 @@ TOOLS: list[dict] = [
         },
     },
 
+    # ── Gmail ──────────────────────────────────────────────────────────────────
+    {
+        "name": "read_gmail_inbox",
+        "description": "Fetch recent emails from Gmail inbox. Set unread_only=true to see only unread messages.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "max_results":  {"type": "integer", "description": "How many emails to fetch (default 10, max 20)."},
+                "unread_only":  {"type": "boolean", "description": "If true, only fetch unread emails (default false)."},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "search_gmail",
+        "description": "Search Gmail with a query string. Supports Gmail search operators e.g. 'from:boss@company.com', 'subject:invoice is:unread', 'after:2026/05/01'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query":       {"type": "string",  "description": "Gmail search query string."},
+                "max_results": {"type": "integer", "description": "Number of results (default 5)."},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "gmail_triage",
+        "description": "Fetch all unread inbox emails and categorise them as URGENT / ACTION / FYI with a one-line summary of each. Call this when the user says 'triage my inbox', 'what emails need attention', or 'run email triage'.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+
+    # ── System vitals ──────────────────────────────────────────────────────────
+    {
+        "name": "get_system_vitals",
+        "description": "Returns live CPU%, RAM usage, disk usage, and network I/O for the host machine. Use when the user asks about performance, resource usage, or system health.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+
+    # ── Browser automation ─────────────────────────────────────────────────────
+    {
+        "name": "browser_navigate",
+        "description": "Navigate the embedded Playwright browser to a URL and return the page title and visible text. Use for reading web pages, filling in forms, or automating web tasks.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"url": {"type": "string", "description": "Full URL (https://...) or domain."}},
+            "required": ["url"],
+        },
+    },
+    {
+        "name": "browser_extract_text",
+        "description": "Extract all visible text from the page currently loaded in the Playwright browser.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "browser_click",
+        "description": "Click a web element by its visible text label or CSS selector.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"target": {"type": "string", "description": "Visible text or CSS selector of the element to click."}},
+            "required": ["target"],
+        },
+    },
+    {
+        "name": "browser_fill",
+        "description": "Type text into an input field or textarea identified by a CSS selector.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "selector": {"type": "string", "description": "CSS selector for the input element."},
+                "value":    {"type": "string", "description": "Text to type."},
+            },
+            "required": ["selector", "value"],
+        },
+    },
+    {
+        "name": "browser_screenshot",
+        "description": "Take a screenshot of the current browser page and return a Claude Vision description of what is visible.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "browser_execute_js",
+        "description": "Run arbitrary JavaScript in the current browser page and return the result.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"code": {"type": "string", "description": "JavaScript expression to evaluate."}},
+            "required": ["code"],
+        },
+    },
+
+    # ── Telegram ───────────────────────────────────────────────────────────────
+    {
+        "name": "send_telegram",
+        "description": "Send a proactive message to the user's Telegram chat. Use for alerts, reminders, price notifications, or anything the user should know even when the HUD isn't open.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"text": {"type": "string", "description": "Message text to send."}},
+            "required": ["text"],
+        },
+    },
+
     # ── Creator ────────────────────────────────────────────────────────────────
     {
         "name": "create_document",
@@ -512,8 +633,18 @@ TOOLS: list[dict] = [
     },
 ]
 
+# ── Telegram dispatch helper ──────────────────────────────────────────────────
+
+def _send_telegram_dispatch(text: str) -> str:
+    try:
+        from jarvis import telegram_bot
+        return telegram_bot.send_message(text)
+    except ImportError:
+        return "Telegram module not available."
+
+
 # ── Dispatch ──────────────────────────────────────────────────────────────────
-_MEMORY_TOOLS = {"remember_this", "recall_fact", "forget_fact"}
+_MEMORY_TOOLS = {"remember_this", "recall_fact", "forget_fact", "recall_semantic"}
 _AGENT_TOOLS  = {
     "plan_route", "look_at_desk",
     "show_location", "search_nearby",
@@ -523,6 +654,7 @@ _AGENT_TOOLS  = {
     "open_url", "open_app",
     "create_document", "draft_email", "translate", "detect_language", "generate_html", "write_code",
     "show_calendar", "get_calendar_events", "create_calendar_event", "delete_calendar_event",
+    "read_gmail_inbox", "search_gmail", "gmail_triage",
 }
 
 _DISPATCH: dict = {
@@ -531,6 +663,7 @@ _DISPATCH: dict = {
     "remember_this":     remember_this,
     "recall_fact":       recall_fact,
     "forget_fact":       forget_fact,
+    "recall_semantic":   recall_semantic,
     # info
     "web_search":        web_search,
     "get_news":          get_news,
@@ -575,6 +708,10 @@ _DISPATCH: dict = {
     "get_calendar_events":    get_calendar_events,
     "create_calendar_event":  create_calendar_event,
     "delete_calendar_event":  delete_calendar_event,
+    # gmail
+    "read_gmail_inbox":  read_gmail_inbox,
+    "search_gmail":      search_gmail,
+    "gmail_triage":      gmail_triage,
     # creator
     "create_document":   create_document,
     "draft_email":       draft_email,
@@ -584,6 +721,17 @@ _DISPATCH: dict = {
     "write_code":        write_code,
     # web
     "open_url":          open_url,
+    # system vitals
+    "get_system_vitals":     get_system_vitals,
+    # browser automation
+    "browser_navigate":      browser_navigate,
+    "browser_extract_text":  browser_extract_text,
+    "browser_click":         browser_click,
+    "browser_fill":          browser_fill,
+    "browser_screenshot":    browser_screenshot,
+    "browser_execute_js":    browser_execute_js,
+    # telegram
+    "send_telegram":         _send_telegram_dispatch,
 }
 
 
@@ -606,6 +754,14 @@ _TAB_FOR_TOOL: dict[str, str] = {
 
 
 def execute_tool(name: str, tool_input: dict, memory: object, agent=None, action_callback=None) -> str:
+    # Route MCP tools through the MCP client
+    if name.startswith("mcp_"):
+        try:
+            from jarvis import mcp_client
+            return mcp_client.call_tool_sync(name, tool_input)
+        except ImportError:
+            return "MCP client not available."
+
     fn = _DISPATCH.get(name)
     if fn is None:
         return f"Unknown tool: {name}"

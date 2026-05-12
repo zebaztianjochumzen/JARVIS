@@ -6,19 +6,47 @@ import json
 import asyncio
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse, Response
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from jarvis.secrets import get_secret
+from jarvis import secrets as _secrets
+from jarvis import runtime_settings as _rs
 
-api_key = get_secret("ANTHROPIC_API_KEY")
-os.environ["ANTHROPIC_API_KEY"] = api_key
+_secrets.load_all(environment=os.environ.get("JARVIS_ENV", "dev"))
 
 from jarvis.agent import Agent  # noqa: E402
+
+# ── Boot autonomous task scheduler ────────────────────────────────────────────
+from jarvis import scheduler as _scheduler
+_scheduler.start()
+
+# ── Boot MCP client (external tool servers) ───────────────────────────────────
+try:
+    from jarvis import mcp_client as _mcp_client
+    _mcp_client.start()
+except Exception as _mcpe:
+    print(f"[JARVIS] MCP client skipped: {_mcpe}", flush=True)
+    _mcp_client = None  # type: ignore
+
+# ── Boot Telegram bot ─────────────────────────────────────────────────────────
+try:
+    from jarvis import telegram_bot as _telegram_bot
+    _telegram_bot.start(lambda: Agent())
+except Exception as _tge:
+    print(f"[JARVIS] Telegram bot skipped: {_tge}", flush=True)
+    _telegram_bot = None  # type: ignore
+
+# ── Boot wake-word background listener ────────────────────────────────────────
+try:
+    from jarvis.voice import wakeword as _wakeword
+    _wakeword.start()
+except Exception as _wwe:
+    print(f"[JARVIS] Wake-word listener skipped: {_wwe}", flush=True)
+    _wakeword = None  # type: ignore
 
 app = FastAPI()
 
@@ -68,32 +96,193 @@ async def get_calendar(days: int = 1):
         return {'events': [], 'error': str(e), 'days': days}
 
 
-# ── Morning briefing scheduler ─────────────────────────────────────────────────
+# ── System status endpoint ────────────────────────────────────────────────────
 
-_briefing_clients: list = []
+@app.get("/api/status")
+async def get_system_status():
+    """Live health check of every JARVIS subsystem. Safe to poll frequently."""
+    result: dict = {}
 
-def _morning_briefing_loop():
-    """Background thread: fires a morning briefing at a configurable hour."""
-    import time as _time
-    BRIEFING_HOUR = int(os.environ.get("BRIEFING_HOUR", "8"))
+    # Claude API
+    try:
+        import anthropic as _ant
+        _ant.Anthropic()  # validates key format without making a network call
+        result["claude"] = {"ok": True, "model": "claude-sonnet-4-6"}
+    except Exception as e:
+        result["claude"] = {"ok": False, "error": str(e)[:80]}
 
-    fired_today = False
-    while True:
-        now = _time.localtime()
-        if now.tm_hour == BRIEFING_HOUR and now.tm_min == 0 and not fired_today:
-            fired_today = True
-            payload = json.dumps({"type": "morning_briefing"})
-            for q in list(_briefing_clients):
-                try:
-                    q.put_nowait(payload)
-                except Exception:
-                    pass
-        if now.tm_hour != BRIEFING_HOUR:
-            fired_today = False
-        _time.sleep(30)
+    # Telegram bot
+    try:
+        from jarvis import telegram_bot as _tg
+        chat_id = _tg.get_chat_id()
+        result["telegram"] = {
+            "ok":      _tg._bot is not None,
+            "running": _tg._started,
+            "chat_id": chat_id,
+            "configured": bool(os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()),
+        }
+    except Exception as e:
+        result["telegram"] = {"ok": False, "running": False, "error": str(e)[:80]}
 
-import threading as _threading
-_threading.Thread(target=_morning_briefing_loop, daemon=True).start()
+    # MCP servers
+    try:
+        from jarvis import mcp_client as _mcp
+        servers = _mcp.get_server_status()
+        result["mcp"] = {
+            "ok":         _mcp._started,
+            "servers":    servers,
+            "tool_count": len(_mcp.get_mcp_tools()),
+        }
+    except Exception:
+        result["mcp"] = {"ok": False, "servers": [], "tool_count": 0}
+
+    # Wake word listener
+    try:
+        from jarvis.voice import wakeword as _ww
+        result["wakeword"] = {"ok": True, "running": _ww._started}
+    except Exception:
+        result["wakeword"] = {"ok": False, "running": False}
+
+    # Obsidian vault
+    try:
+        from jarvis.obsidian import vault_status as _vs
+        summary = _vs()
+        configured = bool(os.environ.get("OBSIDIAN_VAULT_PATH", "").strip())
+        result["obsidian"] = {
+            "ok":         configured and "error" not in summary.lower(),
+            "configured": configured,
+            "summary":    summary,
+        }
+    except Exception as e:
+        result["obsidian"] = {"ok": False, "configured": False, "summary": str(e)[:80]}
+
+    # Autonomous scheduler
+    try:
+        from jarvis import scheduler as _sch
+        result["scheduler"] = {"ok": True, "running": _sch._started}
+    except Exception:
+        result["scheduler"] = {"ok": False, "running": False}
+
+    # Memory database
+    try:
+        import sqlite3
+        from pathlib import Path as _Path
+        db = _Path.home() / ".jarvis" / "memory.db"
+        if db.exists():
+            with sqlite3.connect(str(db)) as conn:
+                facts = conn.execute("SELECT COUNT(*) FROM facts").fetchone()[0]
+                msgs  = conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+            result["memory"] = {"ok": True, "facts": facts, "messages": msgs}
+        else:
+            result["memory"] = {"ok": True, "facts": 0, "messages": 0, "note": "db not initialised yet"}
+    except Exception as e:
+        result["memory"] = {"ok": False, "error": str(e)[:80]}
+
+    # Whisper STT (check if model is loaded in-process)
+    try:
+        from jarvis.voice import stt as _stt
+        result["whisper"] = {
+            "ok":     True,
+            "loaded": _stt._model is not None,
+            "model":  _rs.get("whisper_model", "base"),
+        }
+    except Exception:
+        result["whisper"] = {"ok": False, "loaded": False, "model": "unknown"}
+
+    return result
+
+
+# ── Runtime settings endpoints ────────────────────────────────────────────────
+
+@app.get("/api/settings")
+async def get_settings():
+    return _rs.get_all()
+
+
+@app.post("/api/settings")
+async def update_settings(body: dict):
+    updated = _rs.update(body)
+    return {"ok": True, "settings": updated}
+
+
+# ── Memories endpoint ─────────────────────────────────────────────────────────
+
+@app.get("/api/memories")
+async def get_memories():
+    """Return all stored facts plus Obsidian vault status."""
+    from jarvis.memory import Memory
+    from jarvis.obsidian import vault_status
+    mem   = Memory()
+    facts = mem.get_all_facts()
+    ctx   = mem.get_context_summary()
+    return {
+        "facts":          [{"key": k, "value": v} for k, v in facts.items()],
+        "context_summary": ctx,
+        "fact_count":     len(facts),
+        "obsidian":       vault_status(),
+    }
+
+
+# ── System vitals SSE ─────────────────────────────────────────────────────────
+
+@app.get("/api/vitals")
+async def vitals_stream():
+    """Server-Sent Events stream of live system metrics (1 Hz).
+
+    Payload: { cpu, ram, net_sent_bytes, net_recv_bytes }
+    The frontend computes KB/s from successive net_* values.
+    """
+    try:
+        import psutil as _psutil
+        _psutil.cpu_percent()  # prime the counter (first call always returns 0)
+    except ImportError:
+        async def _no_psutil():
+            yield 'data: {"error":"psutil not installed"}\n\n'
+        return StreamingResponse(_no_psutil(), media_type="text/event-stream")
+
+    async def generate():
+        import psutil as _ps
+        while True:
+            try:
+                cpu = _ps.cpu_percent(interval=None)
+                mem = _ps.virtual_memory()
+                net = _ps.net_io_counters()
+                payload = json.dumps({
+                    "cpu":           round(cpu, 1),
+                    "ram":           round(mem.percent, 1),
+                    "net_sent_bytes": net.bytes_sent,
+                    "net_recv_bytes": net.bytes_recv,
+                })
+                yield f"data: {payload}\n\n"
+            except Exception:
+                pass
+            await asyncio.sleep(1)
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control":               "no-cache",
+            "X-Accel-Buffering":           "no",
+            "Access-Control-Allow-Origin": "*",
+        },
+    )
+
+
+# ── Telegram send endpoint ────────────────────────────────────────────────────
+
+@app.post("/api/telegram/send")
+async def telegram_send(body: dict):
+    """Send a message to the registered Telegram chat."""
+    text = body.get("text", "").strip()
+    if not text:
+        return JSONResponse({"error": "no text"}, status_code=400)
+    try:
+        from jarvis import telegram_bot
+        result = telegram_bot.send_message(text)
+        return {"result": result}
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
 
 
 # ── Browser proxy ─────────────────────────────────────────────────────────────
@@ -337,6 +526,66 @@ async def text_to_speech(body: dict):
     )
 
 
+# ── Whisper transcription endpoint ────────────────────────────────────────────
+
+@app.post("/api/transcribe")
+async def transcribe_audio(
+    audio: UploadFile = File(...),
+    format: str = Form(default="webm"),
+):
+    """Accept an audio blob from the browser and return a Whisper transcript.
+
+    The frontend sends the raw MediaRecorder output (webm/opus by default).
+    Returns {"transcript": "..."} or {"error": "..."}.
+    """
+    try:
+        from jarvis.voice.stt import transcribe_bytes
+        audio_bytes = await audio.read()
+        if not audio_bytes:
+            return JSONResponse({"error": "empty audio"}, status_code=400)
+
+        transcript = await asyncio.get_event_loop().run_in_executor(
+            None, lambda: transcribe_bytes(audio_bytes, audio_format=format)
+        )
+        return {"transcript": transcript}
+    except ImportError:
+        return JSONResponse(
+            {"error": "faster-whisper not installed. Run: pip install faster-whisper"},
+            status_code=503,
+        )
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+# ── Wake-word WebSocket ────────────────────────────────────────────────────────
+
+@app.websocket("/ws/wakeword")
+async def wakeword_ws(websocket: WebSocket):
+    """Push 'wake_word_detected' events to the browser when the backend hears 'Hey JARVIS'."""
+    await websocket.accept()
+
+    import queue as _queue
+    ww_queue: _queue.Queue = _queue.Queue()
+
+    if _wakeword is not None:
+        _wakeword.add_listener(ww_queue)
+
+    try:
+        while True:
+            # Poll the queue every 100 ms; send keep-alive ping every 30 s
+            await asyncio.sleep(0.1)
+            try:
+                event = ww_queue.get_nowait()
+                await websocket.send_text(json.dumps(event))
+            except _queue.Empty:
+                pass
+    except (WebSocketDisconnect, Exception):
+        pass
+    finally:
+        if _wakeword is not None:
+            _wakeword.remove_listener(ww_queue)
+
+
 # ── WebSocket chat ─────────────────────────────────────────────────────────────
 
 @app.websocket("/ws")
@@ -377,28 +626,26 @@ async def websocket_endpoint(websocket: WebSocket):
             agent.pending_actions.clear()
 
     import queue as _queue
-    briefing_q: _queue.Queue = _queue.Queue()
-    _briefing_clients.append(briefing_q)
+    sched_q: _queue.Queue = _queue.Queue()
+    _scheduler.add_client(sched_q)
 
-    async def _watch_briefing():
-        """Push morning briefing trigger to agent when the scheduler fires."""
+    async def _watch_scheduler():
+        """Dispatch autonomous task messages to the agent when the scheduler fires."""
         while True:
-            await asyncio.sleep(15)
+            await asyncio.sleep(10)
             try:
-                briefing_q.get_nowait()
-                briefing_msg = (
-                    "Good morning. Please give me the morning briefing: "
-                    "check today's calendar, get the weather, and pull the top news headlines. "
-                    "Keep it concise and spoken-friendly."
-                )
+                event = sched_q.get_nowait()
+                task_msg = event.get("message", "")
+                if not task_msg:
+                    continue
                 nonlocal cur_task
                 if cur_task and not cur_task.done():
                     agent.cancel(); cur_task.cancel()
-                cur_task = asyncio.create_task(run_agent(briefing_msg))
+                cur_task = asyncio.create_task(run_agent(task_msg))
             except _queue.Empty:
                 pass
 
-    asyncio.create_task(_watch_briefing())
+    asyncio.create_task(_watch_scheduler())
 
     try:
         while True:
@@ -430,5 +677,4 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         pass
     finally:
-        if briefing_q in _briefing_clients:
-            _briefing_clients.remove(briefing_q)
+        _scheduler.remove_client(sched_q)

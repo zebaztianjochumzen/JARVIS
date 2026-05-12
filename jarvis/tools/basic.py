@@ -31,3 +31,15 @@ def recall_fact(key: str, memory: object) -> str:
 def forget_fact(key: str, memory: object) -> str:
     memory.delete_fact(key)  # type: ignore[attr-defined]
     return f"Forgotten: {key}"
+
+
+def recall_semantic(query: str, memory: object) -> str:
+    """Search memory by meaning rather than exact key. Returns the top matching facts."""
+    results = memory.semantic_search(query, n=5)  # type: ignore[attr-defined]
+    if not results:
+        return f"No memories found related to: {query}"
+    lines = [f"Memories related to '{query}':"]
+    for key, value, score in results:
+        pct = int(score * 100)
+        lines.append(f"  [{pct}%] {key}: {value}")
+    return "\n".join(lines)

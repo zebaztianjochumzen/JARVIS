@@ -16,6 +16,10 @@ import TickerBar        from './components/TickerBar'
 import TimerRing        from './components/TimerRing'
 import BrowserPanel     from './components/BrowserPanel'
 import CalendarPanel    from './components/CalendarPanel'
+import BootSequence     from './components/BootSequence'
+import SystemVitals     from './components/SystemVitals'
+import Waveform         from './components/Waveform'
+import ToolTheater      from './components/ToolTheater'
 import './App.css'
 
 const GESTURE_COMMANDS = {
@@ -204,6 +208,9 @@ export default function App() {
 
   return (
     <div className="app">
+      {/* ── Cinematic boot sequence (Phase D) ── */}
+      <BootSequence />
+
       <div className="scanline" />
       <div className="hud-corner tl" /><div className="hud-corner tr" />
       <div className="hud-corner bl" /><div className="hud-corner br" />
@@ -225,6 +232,11 @@ export default function App() {
           <Orb onClick={() => setTab('home')} thinking={thinking} speaking={speaking} />
         </div>
       )}
+
+      {/* ── Phase D overlays ── */}
+      <SystemVitals />
+      <Waveform userSpeaking={userSpeaking} speaking={speaking} />
+      <ToolTheater logs={toolLogs} />
 
       <GestureOverlay onGesture={handleGesture} />
       <VoiceControl   onCommand={handleVoiceCommand} onInterrupt={handleInterrupt} onNotUnderstood={handleNotUnderstood} onUserSpeaking={setUserSpeaking} />
