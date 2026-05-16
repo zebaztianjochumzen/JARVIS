@@ -10,14 +10,6 @@ output "vpc_id" {
   value = aws_vpc.main.id
 }
 
-output "instance_public_ip" {
-  value = aws_instance.main.public_ip
-}
-
-output "vpc_id" {
-  value = aws_vpc.main.id
-}
-
 # ── Secret ARNs (use these to populate values via CLI or Console) ──────────────
 
 output "anthropic_secret_arn" {
@@ -68,14 +60,14 @@ output "spotify_refresh_token_arn" {
 output "secret_names" {
   description = "All secret paths in Secrets Manager"
   value = {
-    anthropic         = aws_secretsmanager_secret.anthropic_api_key.name
-    telegram          = aws_secretsmanager_secret.telegram_bot_token.name
-    google_creds      = aws_secretsmanager_secret.google_oauth_credentials.name
-    google_cal_token  = aws_secretsmanager_secret.google_calendar_token.name
+    anthropic          = aws_secretsmanager_secret.anthropic_api_key.name
+    telegram           = aws_secretsmanager_secret.telegram_bot_token.name
+    google_creds       = aws_secretsmanager_secret.google_oauth_credentials.name
+    google_cal_token   = aws_secretsmanager_secret.google_calendar_token.name
     google_gmail_token = aws_secretsmanager_secret.google_gmail_token.name
-    elevenlabs        = aws_secretsmanager_secret.elevenlabs_api_key.name
-    spotify_id        = aws_secretsmanager_secret.spotify_client_id.name
-    spotify_secret    = aws_secretsmanager_secret.spotify_client_secret.name
-    spotify_token     = aws_secretsmanager_secret.spotify_refresh_token.name
+    elevenlabs         = aws_secretsmanager_secret.elevenlabs_api_key.name
+    spotify_id         = aws_secretsmanager_secret.spotify_client_id.name
+    spotify_secret     = aws_secretsmanager_secret.spotify_client_secret.name
+    spotify_token      = aws_secretsmanager_secret.spotify_refresh_token.name
   }
 }
