@@ -1,3 +1,13 @@
+# ── Frontend ───────────────────────────────────────────────────────────────────
+
+resource "aws_secretsmanager_secret" "mapbox_token" {
+  name                    = "jarvis/${var.environment}/mapbox-token"
+  description             = "Mapbox public token for the JARVIS globe/tactical map"
+  recovery_window_in_days = 0
+
+  tags = { Name = "${var.project_name}-${var.environment}-mapbox-token" }
+}
+
 # ── Core AI ────────────────────────────────────────────────────────────────────
 
 resource "aws_secretsmanager_secret" "anthropic_api_key" {

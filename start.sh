@@ -76,6 +76,20 @@ JARVIS_ENV="${JARVIS_ENV:-dev}" uvicorn api.main:app \
   2>&1 | sed 's/^/[backend] /' &
 BACKEND_PID=$!
 
+# ── Inject frontend env vars from Secrets Manager ────────────────────────────
+FRONTEND_ENV="$ROOT/frontend/.env.local"
+> "$FRONTEND_ENV"  # truncate / create
+
+MAPBOX_TOKEN=$(aws secretsmanager get-secret-value \
+  --secret-id "jarvis/${JARVIS_ENV:-dev}/mapbox-token" \
+  --query SecretString --output text 2>/dev/null || true)
+if [ -n "$MAPBOX_TOKEN" ]; then
+  echo "VITE_MAPBOX_TOKEN=$MAPBOX_TOKEN" >> "$FRONTEND_ENV"
+  info "Mapbox token loaded from Secrets Manager."
+else
+  warn "Mapbox token not found in Secrets Manager — map will show token error."
+fi
+
 # ── Start frontend ────────────────────────────────────────────────────────────
 info "Starting frontend → http://localhost:5173"
 npm --prefix "$ROOT/frontend" run dev 2>&1 | sed 's/^/[frontend] /' &
