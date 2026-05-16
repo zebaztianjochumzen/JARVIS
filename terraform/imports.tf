@@ -1,6 +1,10 @@
 # One-time import blocks — bring manually-created secrets under Terraform state.
 # These are idempotent: once a resource is in state the import block is a no-op.
-# Safe to leave in permanently; remove after first successful apply if preferred.
+
+import {
+  to = aws_secretsmanager_secret.telegram_bot_token
+  id = "jarvis/${var.environment}/telegram-bot-token"
+}
 
 import {
   to = aws_secretsmanager_secret.telegram_owner_id
@@ -22,12 +26,4 @@ import {
   id = "jarvis/${var.environment}/openclaw-admin-sessions"
 }
 
-import {
-  to = aws_secretsmanager_secret.discord_bot_token
-  id = "jarvis/${var.environment}/discord-bot-token"
-}
-
-import {
-  to = aws_secretsmanager_secret.slack_bot_token
-  id = "jarvis/${var.environment}/slack-bot-token"
-}
+# discord_bot_token and slack_bot_token were not pre-created — Terraform will create them.
