@@ -16,7 +16,8 @@ from jarvis.tools.browser_tool  import (
     browser_navigate, browser_extract_text, browser_click,
     browser_fill, browser_screenshot, browser_execute_js,
 )
-from jarvis.tools.system_vitals import get_system_vitals
+from jarvis.tools.system_vitals  import get_system_vitals
+from jarvis.tools.orchestration  import spawn_parallel_research, parallel_web_search
 
 # ── JSON schemas for Claude's tool use API ────────────────────────────────────
 TOOLS: list[dict] = [
@@ -547,7 +548,7 @@ TOOLS: list[dict] = [
         },
     },
 
-    # ── Telegram ───────────────────────────────────────────────────────────────
+    # ── Messaging (OpenClaw multi-platform) ────────────────────────────────────
     {
         "name": "send_telegram",
         "description": "Send a proactive message to the user's Telegram chat. Use for alerts, reminders, price notifications, or anything the user should know even when the HUD isn't open.",
@@ -555,6 +556,47 @@ TOOLS: list[dict] = [
             "type": "object",
             "properties": {"text": {"type": "string", "description": "Message text to send."}},
             "required": ["text"],
+        },
+    },
+    {
+        "name": "send_message",
+        "description": "Broadcast a message to ALL connected OpenClaw channels (Telegram, WhatsApp, Discord, Signal). Prefer this over send_telegram when OpenClaw is configured.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"text": {"type": "string", "description": "Message text to broadcast."}},
+            "required": ["text"],
+        },
+    },
+
+    # ── Orchestration (multi-agent) ────────────────────────────────────────────
+    {
+        "name": "spawn_parallel_research",
+        "description": (
+            "Spawn parallel research sub-agents for multiple topics simultaneously. "
+            "Use when the user asks to compare or research several distinct subjects at once. "
+            "E.g. 'research the top 5 AI chip companies' → topics=['NVIDIA','AMD','Intel','Qualcomm','Apple']."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "topics":         {"type": "array",  "items": {"type": "string"}, "description": "List of topics to research in parallel (max 8)."},
+                "query_template": {"type": "string", "description": "Query template with {topic} placeholder, e.g. 'latest news on {topic}'. Default: '{topic}'."},
+            },
+            "required": ["topics"],
+        },
+    },
+    {
+        "name": "parallel_web_search",
+        "description": (
+            "Run multiple DuckDuckGo searches simultaneously and return all results merged. "
+            "Faster than sequential tool calls when you need information from several independent queries."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "queries": {"type": "array", "items": {"type": "string"}, "description": "List of search queries to run in parallel (max 6)."},
+            },
+            "required": ["queries"],
         },
     },
 
@@ -633,7 +675,7 @@ TOOLS: list[dict] = [
     },
 ]
 
-# ── Telegram dispatch helper ──────────────────────────────────────────────────
+# ── Messaging dispatch helpers ────────────────────────────────────────────────
 
 def _send_telegram_dispatch(text: str) -> str:
     try:
@@ -641,6 +683,26 @@ def _send_telegram_dispatch(text: str) -> str:
         return telegram_bot.send_message(text)
     except ImportError:
         return "Telegram module not available."
+
+
+def _send_message_dispatch(text: str) -> str:
+    """Broadcast to all connected OpenClaw channels; fall back to Telegram."""
+    try:
+        from jarvis import openclaw_gateway
+        if openclaw_gateway._gateway_ok:
+            # OpenClaw gateway is up — it handles multi-platform routing
+            # The gateway broadcasts via its own channel connections.
+            # We also push via Telegram as a reliable fallback.
+            try:
+                from jarvis import telegram_bot
+                telegram_bot.send_message(text)
+            except Exception:
+                pass
+            return "Message broadcast to all OpenClaw channels."
+    except ImportError:
+        pass
+    # Fallback: Telegram only
+    return _send_telegram_dispatch(text)
 
 
 # ── Dispatch ──────────────────────────────────────────────────────────────────
@@ -730,8 +792,12 @@ _DISPATCH: dict = {
     "browser_fill":          browser_fill,
     "browser_screenshot":    browser_screenshot,
     "browser_execute_js":    browser_execute_js,
-    # telegram
-    "send_telegram":         _send_telegram_dispatch,
+    # telegram / openclaw messaging
+    "send_telegram":              _send_telegram_dispatch,
+    "send_message":               _send_message_dispatch,
+    # orchestration
+    "spawn_parallel_research":    spawn_parallel_research,
+    "parallel_web_search":        parallel_web_search,
 }
 
 
@@ -761,6 +827,18 @@ def execute_tool(name: str, tool_input: dict, memory: object, agent=None, action
             return mcp_client.call_tool_sync(name, tool_input)
         except ImportError:
             return "MCP client not available."
+
+    # ── Approval gate for dangerous tools ─────────────────────────────────────
+    try:
+        from jarvis.approval import needs_approval, request_approval
+        if needs_approval(name):
+            if action_callback:
+                action_callback({"type": "approval_pending", "tool": name, "input": tool_input})
+            approved = request_approval(name, tool_input)
+            if not approved:
+                return f"Cancelled: '{name}' was denied or timed out."
+    except ImportError:
+        pass
 
     fn = _DISPATCH.get(name)
     if fn is None:

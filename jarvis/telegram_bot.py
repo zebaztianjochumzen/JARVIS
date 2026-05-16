@@ -66,6 +66,23 @@ def get_chat_id() -> Optional[int]:
 
 # ── Internal ──────────────────────────────────────────────────────────────────
 
+def _is_owner(user_id: int) -> bool:
+    """Return True only if this user_id matches the authorised owner.
+
+    Priority:
+      1. TELEGRAM_OWNER_ID env var — explicit numeric ID (most secure)
+      2. The stored _chat_id from the first /start command (legacy fallback)
+    """
+    owner_env = os.environ.get("TELEGRAM_OWNER_ID", "").strip()
+    if owner_env:
+        try:
+            return int(owner_env) == user_id
+        except ValueError:
+            pass
+    # Fallback: accept whoever sent /start first (existing behaviour)
+    return _chat_id is None or user_id == _chat_id
+
+
 def _run(token: str) -> None:
     global _bot
     try:
@@ -81,6 +98,10 @@ def _run(token: str) -> None:
     @bot.message_handler(commands=["start", "hello"])
     def handle_start(message):
         global _chat_id
+        if not _is_owner(message.from_user.id):
+            bot.reply_to(message, "Access denied.")
+            print(f"[Telegram] Rejected /start from user {message.from_user.id}", flush=True)
+            return
         _chat_id = message.chat.id
         _store_chat_id(_chat_id)
         bot.reply_to(message, "JARVIS online. How can I assist you?")
@@ -88,6 +109,11 @@ def _run(token: str) -> None:
     @bot.message_handler(func=lambda m: True, content_types=["text"])
     def handle_text(message):
         global _chat_id
+        if not _is_owner(message.from_user.id):
+            bot.reply_to(message, "Access denied.")
+            print(f"[Telegram] Rejected message from user {message.from_user.id}", flush=True)
+            return
+
         if _chat_id is None:
             _chat_id = message.chat.id
             _store_chat_id(_chat_id)
