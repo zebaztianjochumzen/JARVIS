@@ -30,6 +30,13 @@ _SECRET_MAP: dict[str, tuple[str, str]] = {
     "SPOTIFY_REFRESH_TOKEN":   ("jarvis/{env}/spotify-refresh-token",    "SPOTIFY_REFRESH_TOKEN"),
     # Reach (Phase C)
     "TELEGRAM_BOT_TOKEN":      ("jarvis/{env}/telegram-bot-token",       "TELEGRAM_BOT_TOKEN"),
+    # OpenClaw multi-platform gateway
+    "OPENCLAW_API_KEY":          ("jarvis/{env}/openclaw-api-key",          "OPENCLAW_API_KEY"),
+    "OPENCLAW_GATEWAY_WS_URL":   ("jarvis/{env}/openclaw-gateway-ws-url",   "OPENCLAW_GATEWAY_WS_URL"),
+    "OPENCLAW_ADMIN_SESSIONS":   ("jarvis/{env}/openclaw-admin-sessions",   "OPENCLAW_ADMIN_SESSIONS"),
+    "TELEGRAM_OWNER_ID":         ("jarvis/{env}/telegram-owner-id",         "TELEGRAM_OWNER_ID"),
+    "DISCORD_BOT_TOKEN":         ("jarvis/{env}/discord-bot-token",         "DISCORD_BOT_TOKEN"),
+    "SLACK_BOT_TOKEN":           ("jarvis/{env}/slack-bot-token",           "SLACK_BOT_TOKEN"),
     # Google APIs  — stored as raw JSON string (full credentials.json content)
     "GOOGLE_CREDENTIALS":      ("jarvis/{env}/google-oauth-credentials",  "GOOGLE_CREDENTIALS"),
     "GOOGLE_CALENDAR_TOKEN":   ("jarvis/{env}/google-calendar-token",    "GOOGLE_CALENDAR_TOKEN"),
