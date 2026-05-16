@@ -4,6 +4,7 @@ import os
 import sys
 import json
 import asyncio
+from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form
@@ -21,42 +22,60 @@ _secrets.load_all(environment=os.environ.get("JARVIS_ENV", "dev"))
 
 from jarvis.agent import Agent  # noqa: E402
 
-# ── Boot autonomous task scheduler ────────────────────────────────────────────
+# ── Import modules (no .start() at module level — avoids double-start with uvicorn --reload) ──
 from jarvis import scheduler as _scheduler
-_scheduler.start()
 
-# ── Boot MCP client (external tool servers) ───────────────────────────────────
 try:
     from jarvis import mcp_client as _mcp_client
-    _mcp_client.start()
 except Exception as _mcpe:
-    print(f"[JARVIS] MCP client skipped: {_mcpe}", flush=True)
+    print(f"[JARVIS] MCP client import skipped: {_mcpe}", flush=True)
     _mcp_client = None  # type: ignore
 
-# ── Boot Telegram bot ─────────────────────────────────────────────────────────
 try:
     from jarvis import telegram_bot as _telegram_bot
-    _telegram_bot.start(lambda: Agent())
 except Exception as _tge:
-    print(f"[JARVIS] Telegram bot skipped: {_tge}", flush=True)
+    print(f"[JARVIS] Telegram bot import skipped: {_tge}", flush=True)
     _telegram_bot = None  # type: ignore
 
-# ── Register approval broadcast with WebSocket clients ────────────────────────
 try:
     from jarvis import approval as _approval
-    # Broadcast callback registered after app starts (see websocket handler below)
 except Exception:
     _approval = None  # type: ignore
 
-# ── Boot wake-word background listener ────────────────────────────────────────
 try:
     from jarvis.voice import wakeword as _wakeword
-    _wakeword.start()
 except Exception as _wwe:
-    print(f"[JARVIS] Wake-word listener skipped: {_wwe}", flush=True)
+    print(f"[JARVIS] Wake-word import skipped: {_wwe}", flush=True)
     _wakeword = None  # type: ignore
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Runs only in the actual uvicorn worker, not the reloader process.
+    _scheduler.start()
+
+    if _mcp_client is not None:
+        try:
+            _mcp_client.start()
+        except Exception as e:
+            print(f"[JARVIS] MCP client skipped: {e}", flush=True)
+
+    if _telegram_bot is not None:
+        try:
+            _telegram_bot.start(lambda: Agent())
+        except Exception as e:
+            print(f"[JARVIS] Telegram bot skipped: {e}", flush=True)
+
+    if _wakeword is not None:
+        try:
+            _wakeword.start()
+        except Exception as e:
+            print(f"[JARVIS] Wake-word listener skipped: {e}", flush=True)
+
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 # ── Mount vision server (camera + gesture) on /vision ─────────────────────────
 try:
