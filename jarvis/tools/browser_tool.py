@@ -37,7 +37,11 @@ def _get_page():
         _playwright = sync_playwright().start()
 
     headless = os.environ.get("BROWSER_HEADLESS", "1") not in ("0", "false", "no")
-    _browser  = _playwright.chromium.launch(headless=headless)
+    system_chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    launch_kwargs = {"headless": headless}
+    if os.path.exists(system_chrome):
+        launch_kwargs["executable_path"] = system_chrome
+    _browser = _playwright.chromium.launch(**launch_kwargs)
     ctx       = _browser.new_context(
         viewport={"width": 1280, "height": 800},
         user_agent=(

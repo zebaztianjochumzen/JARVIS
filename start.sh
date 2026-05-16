@@ -48,15 +48,6 @@ if [ ! -d "$ROOT/frontend/node_modules" ]; then
   npm --prefix "$ROOT/frontend" install --silent
 fi
 
-# ── Playwright browsers (optional — browser automation tool only) ─────────────
-if ! python -c "
-from playwright.sync_api import sync_playwright
-p = sync_playwright().__enter__()
-b = p.chromium.launch(); b.close(); p.stop()
-" &>/dev/null 2>&1; then
-  info "Installing Playwright browser (optional, browser automation)..."
-  python -m playwright install chromium &>/dev/null || warn "Playwright browser install failed — browser_navigate tool will be unavailable. Run 'python -m playwright install chromium' manually when online."
-fi
 
 # ── Clear stale processes on our ports ───────────────────────────────────────
 pkill -9 -f "uvicorn api.main" 2>/dev/null || true
@@ -88,6 +79,20 @@ MAPBOX_TOKEN=$(aws secretsmanager get-secret-value \
   --secret-id "jarvis/${JARVIS_ENV:-dev}/mapbox-token" \
   --query SecretString --output text 2>/dev/null || true)
 if [ -n "$MAPBOX_TOKEN" ]; then
+  # Unwrap JSON-wrapped secrets (e.g. {"token":""} → token)
+  MAPBOX_TOKEN=$(echo "$MAPBOX_TOKEN" | python3 -c "
+import sys, json
+raw = sys.stdin.read().strip()
+try:
+    d = json.loads(raw)
+    if isinstance(d, dict):
+        keys, vals = list(d.keys()), list(d.values())
+        print(keys[0] if vals[0] == '' else vals[0])
+    else:
+        print(raw)
+except Exception:
+    print(raw)
+" 2>/dev/null || echo "$MAPBOX_TOKEN")
   echo "VITE_MAPBOX_TOKEN=$MAPBOX_TOKEN" >> "$FRONTEND_ENV"
   info "Mapbox token loaded from Secrets Manager."
 else

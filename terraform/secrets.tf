@@ -114,17 +114,33 @@ resource "aws_secretsmanager_secret" "slack_bot_token" {
   tags = { Name = "${var.project_name}-${var.environment}-slack-bot-token" }
 }
 
-# ── Google APIs (Calendar + Gmail) ────────────────────────────────────────────
+# ── Google APIs ───────────────────────────────────────────────────────────────
 #
-# Store the full JSON content of credentials.json downloaded from Google Cloud Console.
-# After `terraform apply`, populate via:
+# One API key covers all Google Maps Platform services plus YouTube Data API:
+#   Maps, Places, Geocoding, Directions, Distance Matrix, Pollen, YouTube, etc.
+#
+# Populate after `terraform apply`:
+#   aws secretsmanager put-secret-value \
+#     --secret-id jarvis/<env>/google-api-key \
+#     --secret-string "YOUR_API_KEY"
+#
+# OAuth credentials (credentials.json) cover Calendar, Gmail, and Drive.
+# Populate via:
 #   aws secretsmanager put-secret-value \
 #     --secret-id jarvis/<env>/google-oauth-credentials \
 #     --secret-string file://credentials.json
 #
+resource "aws_secretsmanager_secret" "google_api_key" {
+  name                    = "jarvis/${var.environment}/google-api-key"
+  description             = "Google API key — Maps Platform, Places, Geocoding, Directions, Distance Matrix, Pollen, YouTube Data API"
+  recovery_window_in_days = 0
+
+  tags = { Name = "${var.project_name}-${var.environment}-google-api-key" }
+}
+
 resource "aws_secretsmanager_secret" "google_oauth_credentials" {
   name                    = "jarvis/${var.environment}/google-oauth-credentials"
-  description             = "Google OAuth2 credentials JSON (Desktop app) — used for Calendar and Gmail"
+  description             = "Google OAuth2 credentials JSON (Desktop app) — Calendar, Gmail, Drive"
   recovery_window_in_days = 0
 
   tags = { Name = "${var.project_name}-${var.environment}-google-oauth-credentials" }
@@ -132,7 +148,7 @@ resource "aws_secretsmanager_secret" "google_oauth_credentials" {
 
 resource "aws_secretsmanager_secret" "google_calendar_token" {
   name                    = "jarvis/${var.environment}/google-calendar-token"
-  description             = "Google Calendar OAuth token JSON — written by JARVIS after first auth"
+  description             = "Google Calendar OAuth token — written by JARVIS after first auth"
   recovery_window_in_days = 0
 
   tags = { Name = "${var.project_name}-${var.environment}-google-calendar-token" }
@@ -140,8 +156,16 @@ resource "aws_secretsmanager_secret" "google_calendar_token" {
 
 resource "aws_secretsmanager_secret" "google_gmail_token" {
   name                    = "jarvis/${var.environment}/google-gmail-token"
-  description             = "Google Gmail OAuth token JSON — written by JARVIS after first auth"
+  description             = "Google Gmail OAuth token — written by JARVIS after first auth"
   recovery_window_in_days = 0
 
   tags = { Name = "${var.project_name}-${var.environment}-google-gmail-token" }
+}
+
+resource "aws_secretsmanager_secret" "google_drive_token" {
+  name                    = "jarvis/${var.environment}/google-drive-token"
+  description             = "Google Drive OAuth token — written by JARVIS after first auth"
+  recovery_window_in_days = 0
+
+  tags = { Name = "${var.project_name}-${var.environment}-google-drive-token" }
 }

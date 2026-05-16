@@ -101,3 +101,13 @@ def navigate_to(tab: str, agent=None) -> str:
     if agent is not None:
         agent.pending_actions.append({"type": "switch_tab", "tab": tab})
     return f"Navigated to {tab}."
+
+
+def open_widget(widget: str, action: str = "open", agent=None) -> str:
+    """Open or close a floating widget overlay."""
+    valid = {"chat", "spotify", "camera"}
+    if widget not in valid:
+        return f"Unknown widget '{widget}'. Valid: {', '.join(sorted(valid))}"
+    if agent is not None:
+        agent.pending_actions.append({"type": f"{action}_widget", "widget": widget})
+    return f"Widget '{widget}' {action}ed."

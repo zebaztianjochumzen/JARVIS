@@ -25,19 +25,28 @@ export default function MapPanel({ visible, route, showLocation }) {
   const [coords,    setCoords]    = useState(null)
   const [statusMsg, setStatusMsg] = useState('STANDBY')
 
+  const [webglError, setWebglError] = useState(false)
+
   // ── Map init ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!TOKEN || !containerRef.current) return
+    if (!mapboxgl.supported()) { setWebglError(true); return }
 
-    const map = new mapboxgl.Map({
-      container: containerRef.current,
-      style: 'mapbox://styles/mapbox/navigation-night-v1',
-      center: [20, 30],
-      zoom: 2.5,
-      projection: { name: 'globe' },
-      antialias: true,
-      attributionControl: false,
-    })
+    let map
+    try {
+      map = new mapboxgl.Map({
+        container: containerRef.current,
+        style: 'mapbox://styles/mapbox/navigation-night-v1',
+        center: [20, 30],
+        zoom: 2.5,
+        projection: { name: 'globe' },
+        antialias: true,
+        attributionControl: false,
+      })
+    } catch {
+      setWebglError(true)
+      return
+    }
 
     // ── Animation state (closure-scoped to this map instance) ────────────────
     const state = { mode: 'idle', animId: null, userDragging: false }
@@ -158,14 +167,20 @@ export default function MapPanel({ visible, route, showLocation }) {
 
     return () => {
       stopAnim()
-      map.remove()
+      map?.remove()
       ctrlRef.current = {}
     }
   }, [])
 
-  // ── Resize on visibility change ───────────────────────────────────────────
+  // ── Resize + repaint on visibility change ────────────────────────────────
   useEffect(() => {
-    if (visible && ctrlRef.current.map) setTimeout(() => ctrlRef.current.map.resize(), 50)
+    if (visible && ctrlRef.current.map) {
+      const map = ctrlRef.current.map
+      setTimeout(() => {
+        map.resize()
+        map.triggerRepaint()
+      }, 60)
+    }
   }, [visible])
 
   // ── React to showLocation ─────────────────────────────────────────────────
@@ -276,6 +291,23 @@ export default function MapPanel({ visible, route, showLocation }) {
               }}>{value}</div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* WebGL unavailable fallback */}
+      {webglError && (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 20,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(2,11,24,0.97)', gap: 12,
+          fontFamily: "'Share Tech Mono', monospace",
+        }}>
+          <div style={{ fontSize: 14, letterSpacing: 4, color: '#f87171', textShadow: '0 0 12px rgba(248,113,113,0.7)' }}>
+            ⚠ WEBGL UNAVAILABLE
+          </div>
+          <div style={{ fontSize: 11, color: 'rgba(0,180,255,0.5)', letterSpacing: 2, textAlign: 'center', lineHeight: 2 }}>
+            Enable hardware acceleration in<br />Chrome → Settings → System
+          </div>
         </div>
       )}
 

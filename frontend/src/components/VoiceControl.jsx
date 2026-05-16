@@ -1,22 +1,20 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const WAKE_WORDS      = ['hey jarvis', 'jarvis']
-const MIN_CONFIDENCE  = 0.45
-const CMD_COOLDOWN_MS = 3000
-const VOICE_THRESHOLD = 0.018
-const SILENCE_MS      = 1400   // stop recording after this ms of silence
-const MAX_RECORD_MS   = 15000  // hard cap on recording length
+const WAKE_WORDS           = ['hey jarvis', 'jarvis']
+const MIN_CONFIDENCE       = 0.45
+const CMD_COOLDOWN_MS      = 1500   // ms between accepted commands
+const VOICE_THRESHOLD      = 0.018
+const SILENCE_MS           = 1400   // stop whisper recording after this ms of silence
+const MAX_RECORD_MS        = 15000  // hard cap on whisper recording
+const CONVERSATION_TIMEOUT = 30000  // stay in conversation mode this long after last response
+const CONV_ACTIVATE_DELAY  = 400    // ms after TTS ends before listening — clears echo buffer
 
-const WS_WAKEWORD_URL    = 'ws://localhost:8000/ws/wakeword'
-const TRANSCRIBE_URL     = 'http://localhost:8000/api/transcribe'
+const WS_WAKEWORD_URL = 'ws://localhost:8000/ws/wakeword'
+const TRANSCRIBE_URL  = 'http://localhost:8000/api/transcribe'
 
 const mono = { fontFamily: "'Share Tech Mono', monospace" }
 const raj  = { fontFamily: "'Rajdhani', sans-serif" }
-
-// ── Voice state machine ────────────────────────────────────────────────────────
-// IDLE → RECORDING → TRANSCRIBING → IDLE
-// IDLE is also the state while the browser SpeechAPI is passively listening
 
 // ── Helper: pick the built-in mic ────────────────────────────────────────────
 async function getBuiltinMicStream(constraints = {}) {
@@ -41,7 +39,7 @@ async function getBuiltinMicStream(constraints = {}) {
 }
 
 // ── Silence-aware MediaRecorder helper ────────────────────────────────────────
-async function recordUntilSilence(stream, onData) {
+async function recordUntilSilence(stream) {
   return new Promise((resolve) => {
     const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
       ? 'audio/webm;codecs=opus'
@@ -90,9 +88,7 @@ async function recordUntilSilence(stream, onData) {
     recorder.ondataavailable = e => { if (e.data?.size > 0) chunks.push(e.data) }
     recorder.onstop = () => {
       clearTimeout(hardStop)
-      const blob = new Blob(chunks, { type: mimeType })
-      onData?.(blob)
-      resolve(blob)
+      resolve(new Blob(chunks, { type: mimeType }))
     }
 
     recorder.start(100)
@@ -101,19 +97,56 @@ async function recordUntilSilence(stream, onData) {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function VoiceControl({ onCommand, onInterrupt, onNotUnderstood, onUserSpeaking }) {
-  const [supported,    setSupported]    = useState(true)
-  const [micLabel,     setMicLabel]     = useState('')
-  const [voiceMode,    setVoiceMode]    = useState('browser') // 'browser' | 'whisper'
-  const [recState,     setRecState]     = useState('idle')    // 'idle' | 'recording' | 'transcribing'
-  const [wakeActive,   setWakeActive]   = useState(false)     // backend wake word connected
-  const [pttHeld,      setPttHeld]      = useState(false)
+export default function VoiceControl({ onCommand, onInterrupt, onNotUnderstood, onUserSpeaking, isJarvisActive }) {
+  const [supported,  setSupported]  = useState(true)
+  const [micLabel,   setMicLabel]   = useState('')
+  const [voiceMode,  setVoiceMode]  = useState('browser') // 'browser' | 'whisper'
+  const [recState,   setRecState]   = useState('idle')    // 'idle' | 'recording' | 'transcribing'
+  const [wakeActive, setWakeActive] = useState(false)     // backend wake-word WS connected
+  const [pttHeld,    setPttHeld]    = useState(false)
+  const [convActive, setConvActive] = useState(false)     // no wake word needed for follow-ups
 
-  const lastCmdRef   = useRef(0)
-  const restartRef   = useRef(true)
-  const streamRef    = useRef(null)   // mic stream reused across recordings
-  const recActiveRef = useRef(false)  // prevent double-recordings
-  const wwWsRef      = useRef(null)   // wakeword WebSocket
+  const lastCmdRef        = useRef(0)
+  const restartRef        = useRef(true)
+  const streamRef         = useRef(null)    // reused mic stream
+  const recActiveRef      = useRef(false)   // prevent double-recordings
+  const wwWsRef           = useRef(null)    // wake-word WebSocket
+  const convTimerRef      = useRef(null)    // conversation timeout handle
+  const convActiveRef     = useRef(false)   // closure-safe mirror of convActive
+  const isJarvisActiveRef = useRef(false)   // closure-safe: JARVIS is thinking/speaking/playing TTS
+  const lastVoiceCmd      = useRef(false)   // was the last command voice-triggered?
+  const autoWhisperRef    = useRef(false)   // was whisper recording auto-started (not PTT/wake)?
+
+  // ── Sync isJarvisActiveRef ────────────────────────────────────────────────
+  useEffect(() => { isJarvisActiveRef.current = !!isJarvisActive }, [isJarvisActive])
+
+  // ── Conversation mode helpers ─────────────────────────────────────────────
+  const activateConversation = useCallback(() => {
+    setConvActive(true)
+    convActiveRef.current = true
+    clearTimeout(convTimerRef.current)
+    convTimerRef.current = setTimeout(() => {
+      setConvActive(false)
+      convActiveRef.current = false
+    }, CONVERSATION_TIMEOUT)
+  }, [])
+
+  // Activate conversation mode when JARVIS finishes (thinking + speaking + TTS all done).
+  // Only activates if the interaction was voice-triggered (not typed chat).
+  // Small delay clears lingering TTS audio from the STT buffer to prevent echo commands.
+  const prevActiveRef = useRef(false)
+  useEffect(() => {
+    if (prevActiveRef.current && !isJarvisActive && lastVoiceCmd.current) {
+      lastVoiceCmd.current = false
+      const t = setTimeout(() => {
+        activateConversation()
+        if (voiceMode === 'whisper') startWhisperRecording(true)
+      }, CONV_ACTIVATE_DELAY)
+      prevActiveRef.current = false
+      return () => clearTimeout(t)
+    }
+    prevActiveRef.current = !!isJarvisActive
+  }, [isJarvisActive]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Whisper transcription ─────────────────────────────────────────────────
   const transcribeAndSend = useCallback(async (blob) => {
@@ -127,21 +160,22 @@ export default function VoiceControl({ onCommand, onInterrupt, onNotUnderstood, 
       const res  = await fetch(TRANSCRIBE_URL, { method: 'POST', body: form })
       const data = await res.json()
       const text = (data.transcript || '').trim()
-
       console.log('[Whisper] transcript:', text)
 
       if (text.length > 1) {
         const now = Date.now()
         if (now - lastCmdRef.current >= CMD_COOLDOWN_MS) {
           lastCmdRef.current = now
+          lastVoiceCmd.current = true
           onCommand(text)
         }
       } else {
-        onNotUnderstood?.()
+        // Don't say "I didn't get that" for auto-started recordings — user may simply not have spoken yet
+        if (!autoWhisperRef.current) onNotUnderstood?.()
       }
     } catch (err) {
       console.warn('[Whisper] transcription failed:', err)
-      onNotUnderstood?.()
+      if (!autoWhisperRef.current) onNotUnderstood?.()
     } finally {
       setRecState('idle')
       recActiveRef.current = false
@@ -149,8 +183,9 @@ export default function VoiceControl({ onCommand, onInterrupt, onNotUnderstood, 
   }, [onCommand, onNotUnderstood])
 
   // ── Start a Whisper recording session ─────────────────────────────────────
-  const startWhisperRecording = useCallback(async () => {
+  const startWhisperRecording = useCallback(async (isAuto = false) => {
     if (recActiveRef.current) return
+    autoWhisperRef.current = isAuto
     recActiveRef.current = true
     onInterrupt?.()
     setRecState('recording')
@@ -161,7 +196,7 @@ export default function VoiceControl({ onCommand, onInterrupt, onNotUnderstood, 
       }
       if (!streamRef.current) { recActiveRef.current = false; setRecState('idle'); return }
 
-      const blob = await recordUntilSilence(streamRef.current, null)
+      const blob = await recordUntilSilence(streamRef.current)
       await transcribeAndSend(blob)
     } catch (err) {
       console.warn('[Whisper] recording error:', err)
@@ -182,35 +217,24 @@ export default function VoiceControl({ onCommand, onInterrupt, onNotUnderstood, 
       ws = new WebSocket(WS_WAKEWORD_URL)
       wwWsRef.current = ws
 
-      ws.onopen = () => {
-        setWakeActive(true)
-        console.log('[WakeWord] backend connected')
-      }
+      ws.onopen    = () => { setWakeActive(true);  console.log('[WakeWord] connected') }
       ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data)
-          if (msg.type === 'wake_word_detected') {
-            console.log('[WakeWord] triggered from backend')
-            startWhisperRecording()
-          }
+          if (msg.type === 'wake_word_detected') startWhisperRecording()
         } catch {}
       }
-      ws.onclose = () => {
-        setWakeActive(false)
-        if (!dead) setTimeout(connect, 4000)
-      }
+      ws.onclose = () => { setWakeActive(false); if (!dead) setTimeout(connect, 4000) }
       ws.onerror = () => ws.close()
     }
 
     connect()
-    return () => {
-      dead = true
-      setWakeActive(false)
-      try { ws?.close() } catch {}
-    }
+    return () => { dead = true; setWakeActive(false); try { ws?.close() } catch {} }
   }, [voiceMode, startWhisperRecording])
 
-  // ── Browser Speech API (always-on fallback + browser mode) ───────────────
+  // ── Browser Speech API ────────────────────────────────────────────────────
+  // Always-on. In browser mode it sends commands directly.
+  // In whisper mode it acts as a wake-word detector / fallback when WS is down.
   useEffect(() => {
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SpeechRec) { setSupported(false); return }
@@ -226,9 +250,28 @@ export default function VoiceControl({ onCommand, onInterrupt, onNotUnderstood, 
         if (!event.results[i].isFinal) continue
         const conf = event.results[i][0].confidence
         const raw  = event.results[i][0].transcript.toLowerCase().trim()
-        console.log(`[BrowserSTT] heard: "${raw}" (conf: ${conf.toFixed(2)})`)
+        console.log(`[BrowserSTT] "${raw}" (${conf.toFixed(2)})`)
         if (conf < MIN_CONFIDENCE) continue
 
+        // ── Conversation mode: no wake word required ──────────────────────
+        // Block while JARVIS is active — prevents TTS audio from the speakers
+        // being picked up by the mic and re-triggering a command.
+        if (convActiveRef.current) {
+          if (isJarvisActiveRef.current) continue
+          if (raw.length > 1) {
+            const now = Date.now()
+            if (now - lastCmdRef.current >= CMD_COOLDOWN_MS) {
+              lastCmdRef.current = now
+              lastVoiceCmd.current = true
+              activateConversation() // reset the 30 s timer
+              onInterrupt?.()
+              onCommand(raw)
+            }
+          }
+          continue
+        }
+
+        // ── Wake word required ────────────────────────────────────────────
         let wakeEnd = -1
         for (const w of WAKE_WORDS) {
           if (raw.startsWith(w)) {
@@ -239,39 +282,32 @@ export default function VoiceControl({ onCommand, onInterrupt, onNotUnderstood, 
         if (wakeEnd === -1) continue
 
         onInterrupt?.()
-
         const command = raw.slice(wakeEnd).replace(/^[\s,]+/, '').trim()
         console.log(`[BrowserSTT] command: "${command}"`)
-
-        if (voiceMode === 'whisper' && !wakeActive) {
-          // Backend ws not connected yet — use browser STT as fallback text
-          if (command.length > 1) {
-            const now = Date.now()
-            if (now - lastCmdRef.current >= CMD_COOLDOWN_MS) {
-              lastCmdRef.current = now
-              onCommand(command)
-            }
-          } else {
-            onNotUnderstood?.()
-          }
-          return
-        }
 
         if (voiceMode === 'browser') {
           if (command.length > 1) {
             const now = Date.now()
             if (now - lastCmdRef.current >= CMD_COOLDOWN_MS) {
               lastCmdRef.current = now
+              lastVoiceCmd.current = true
               onCommand(command)
             }
           } else {
-            // Wake word said alone — in whisper mode kick off a recording
-            if (voiceMode === 'whisper') startWhisperRecording()
-            else onNotUnderstood?.()
+            onNotUnderstood?.()
           }
+        } else if (voiceMode === 'whisper' && !wakeActive) {
+          // WS not connected yet — use browser STT transcript as fallback
+          if (command.length > 1) {
+            const now = Date.now()
+            if (now - lastCmdRef.current >= CMD_COOLDOWN_MS) {
+              lastCmdRef.current = now
+              lastVoiceCmd.current = true
+              onCommand(command)
+            }
+          }
+          // if wakeActive, the backend WS triggers startWhisperRecording
         }
-        // In whisper mode, backend listener handles the actual recording
-        // The browser STT just handles text preview / fallback above
       }
     }
 
@@ -280,7 +316,7 @@ export default function VoiceControl({ onCommand, onInterrupt, onNotUnderstood, 
 
     try { rec.start() } catch {}
     return () => { restartRef.current = false; rec.onend = null; try { rec.stop() } catch {} }
-  }, [voiceMode, wakeActive, onCommand, onInterrupt, onNotUnderstood, startWhisperRecording])
+  }, [voiceMode, wakeActive, onCommand, onInterrupt, onNotUnderstood, activateConversation, startWhisperRecording])
 
   // ── Mic amplitude → voice-reactive orb ───────────────────────────────────
   useEffect(() => {
@@ -306,7 +342,7 @@ export default function VoiceControl({ onCommand, onInterrupt, onNotUnderstood, 
           analyser.getFloatTimeDomainData(buf)
           let sum = 0
           for (const v of buf) sum += v * v
-          const rms       = Math.sqrt(sum / buf.length)
+          const rms        = Math.sqrt(sum / buf.length)
           const isSpeaking = rms > VOICE_THRESHOLD
           if (isSpeaking !== speaking) { speaking = isSpeaking; onUserSpeaking(isSpeaking) }
           animId = requestAnimationFrame(tick)
@@ -323,11 +359,11 @@ export default function VoiceControl({ onCommand, onInterrupt, onNotUnderstood, 
     return () => cleanup?.()
   }, [onUserSpeaking])
 
-  // ── Push-to-talk: mouse/touch handlers ───────────────────────────────────
+  // ── Push-to-talk ──────────────────────────────────────────────────────────
   const handlePttDown = useCallback((e) => {
     e.preventDefault()
     setPttHeld(true)
-    if (voiceMode === 'whisper') startWhisperRecording()
+    if (voiceMode === 'whisper') startWhisperRecording(false)
   }, [voiceMode, startWhisperRecording])
 
   const handlePttUp = useCallback((e) => {
@@ -342,9 +378,8 @@ export default function VoiceControl({ onCommand, onInterrupt, onNotUnderstood, 
     : 'DETECTING...'
   const isPhone = micLabel.toLowerCase().includes('iphone') || micLabel.toLowerCase().includes('continuity')
 
-  const recColor = recState === 'recording'     ? '#f44'
-                 : recState === 'transcribing'  ? '#fa0'
-                 : voiceMode === 'whisper'       ? '#4fc3f7'
+  const recColor = recState === 'recording'    ? '#f44'
+                 : recState === 'transcribing' ? '#fa0'
                  : '#4fc3f7'
 
   const modeLabel = voiceMode === 'whisper'
@@ -359,32 +394,25 @@ export default function VoiceControl({ onCommand, onInterrupt, onNotUnderstood, 
       borderRadius: 6, padding: '8px 13px', pointerEvents: 'auto',
       userSelect: 'none',
     }}>
-      {/* Header */}
       <div style={{ ...raj, fontSize: 8, letterSpacing: 4, color: 'rgba(79,195,247,0.35)', marginBottom: 6 }}>
         VOICE  CONTROL
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <Row dot color={recColor} label={modeLabel} />
-        <Row dot label='"JARVIS, [command]"' dim />
+        <Row dot
+          label={convActive ? 'LISTENING...' : '"JARVIS, [command]"'}
+          dim={!convActive}
+          color={convActive ? '#4fc3f7' : undefined}
+        />
         <Row label={shortLabel} dim color={isPhone ? 'rgba(255,120,80,0.7)' : undefined} />
       </div>
 
-      {/* Mode toggle */}
       <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
-        <ModeBtn
-          active={voiceMode === 'browser'}
-          onClick={() => setVoiceMode('browser')}
-          label='WEB STT'
-        />
-        <ModeBtn
-          active={voiceMode === 'whisper'}
-          onClick={() => setVoiceMode('whisper')}
-          label='WHISPER'
-        />
+        <ModeBtn active={voiceMode === 'browser'} onClick={() => setVoiceMode('browser')} label='WEB STT' />
+        <ModeBtn active={voiceMode === 'whisper'} onClick={() => setVoiceMode('whisper')} label='WHISPER' />
       </div>
 
-      {/* Push-to-talk */}
       {voiceMode === 'whisper' && (
         <button
           onMouseDown={handlePttDown}
@@ -393,9 +421,7 @@ export default function VoiceControl({ onCommand, onInterrupt, onNotUnderstood, 
           onTouchEnd={handlePttUp}
           style={{
             marginTop: 8, width: '100%',
-            background: pttHeld || recState === 'recording'
-              ? 'rgba(244,68,68,0.25)'
-              : 'rgba(79,195,247,0.08)',
+            background: pttHeld || recState === 'recording' ? 'rgba(244,68,68,0.25)' : 'rgba(79,195,247,0.08)',
             border: `1px solid ${pttHeld || recState === 'recording' ? 'rgba(244,68,68,0.6)' : 'rgba(79,195,247,0.2)'}`,
             borderRadius: 4, cursor: 'pointer', padding: '5px 0',
             color: pttHeld || recState === 'recording' ? '#f44' : 'rgba(79,195,247,0.7)',

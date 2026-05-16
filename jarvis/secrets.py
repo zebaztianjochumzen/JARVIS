@@ -37,6 +37,9 @@ _SECRET_MAP: dict[str, tuple[str, str]] = {
     "GOOGLE_CREDENTIALS":      ("jarvis/{env}/google-oauth-credentials",  "GOOGLE_CREDENTIALS"),
     "GOOGLE_CALENDAR_TOKEN":   ("jarvis/{env}/google-calendar-token",    "GOOGLE_CALENDAR_TOKEN"),
     "GOOGLE_GMAIL_TOKEN":      ("jarvis/{env}/google-gmail-token",       "GOOGLE_GMAIL_TOKEN"),
+    "GOOGLE_API_KEY":          ("jarvis/{env}/google-api-key",           "GOOGLE_API_KEY"),
+    # Google Drive — token stored separately (auto-generated on first use)
+    "GOOGLE_DRIVE_TOKEN":      ("jarvis/{env}/google-drive-token",       "GOOGLE_DRIVE_TOKEN"),
 }
 
 # In-memory cache — avoids repeated network calls within one process lifetime
@@ -78,7 +81,7 @@ def get_secret(name: str, environment: str = JARVIS_ENV) -> str:
             try:
                 data = json.loads(raw)
                 # Return full JSON string for compound secrets (Google tokens, credentials)
-                if name in ("GOOGLE_CREDENTIALS", "GOOGLE_CALENDAR_TOKEN", "GOOGLE_GMAIL_TOKEN"):
+                if name in ("GOOGLE_CREDENTIALS", "GOOGLE_CALENDAR_TOKEN", "GOOGLE_GMAIL_TOKEN", "GOOGLE_DRIVE_TOKEN"):
                     value = raw
                 else:
                     value = next(iter(data.values()))

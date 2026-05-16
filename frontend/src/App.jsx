@@ -54,6 +54,7 @@ export default function App() {
   const [activeTimer,  setActiveTimer]  = useState(null)
   const [userSpeaking, setUserSpeaking] = useState(false)
   const [browserUrl,   setBrowserUrl]   = useState('')
+  const [audioPlaying, setAudioPlaying] = useState(false)
 
   // ── Widget system ────────────────────────────────────────────────────────────
   const [widgetOpen, setWidgetOpen] = useState({ chat: false, spotify: false, camera: false })
@@ -151,6 +152,7 @@ export default function App() {
   function speakViaApi(text) {
     if (!text) return
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+    setAudioPlaying(false)
     fetch('http://localhost:8000/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -162,8 +164,11 @@ export default function App() {
       if (!blob) return
       const url   = URL.createObjectURL(blob)
       const audio = new Audio(url)
-      audioRef.current   = audio
-      audio.onended = () => { URL.revokeObjectURL(url); audioRef.current = null }
+      audioRef.current = audio
+      const cleanup = () => { setAudioPlaying(false); URL.revokeObjectURL(url); audioRef.current = null }
+      audio.onended = cleanup
+      audio.onerror = cleanup
+      setAudioPlaying(true)
       audio.play()
     }).catch(() => {})
   }
@@ -195,6 +200,7 @@ export default function App() {
   function handleChatSend(text) {
     if (!text) return
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+    setAudioPlaying(false)
     setSpeaking(false)
     setThinking(false)
     gestureActiveRef.current   = false
@@ -209,6 +215,7 @@ export default function App() {
 
   const handleInterrupt = useCallback(() => {
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+    setAudioPlaying(false)
     setSpeaking(false)
     setThinking(false)
     gestureActiveRef.current   = false
@@ -349,6 +356,7 @@ export default function App() {
         onInterrupt={handleInterrupt}
         onNotUnderstood={handleNotUnderstood}
         onUserSpeaking={setUserSpeaking}
+        isJarvisActive={thinking || speaking || audioPlaying}
       />
     </div>
   )

@@ -6,8 +6,10 @@ from jarvis.tools.vision   import look_at_desk
 from jarvis.tools.info     import web_search, get_news, get_weather, get_stock_price, get_market_summary
 from jarvis.tools.system   import set_timer, open_app, open_url, run_shell, take_screenshot, read_clipboard, write_clipboard
 from jarvis.tools.dev      import read_file, write_file, git_status, run_tests, search_codebase
-from jarvis.tools.map_tools import show_location, search_nearby
-from jarvis.tools.media    import play_music, set_volume, show_news_stream, show_stocks, show_briefing, navigate_to
+from jarvis.tools.map_tools import show_location, search_nearby, compare_travel_times, get_pollen
+from jarvis.tools.youtube_tool import youtube_search
+from jarvis.tools.google_drive import search_drive, read_drive_file, open_drive_file
+from jarvis.tools.media    import play_music, set_volume, show_news_stream, show_stocks, show_briefing, navigate_to, open_widget
 from jarvis.tools.files    import list_files, find_file, open_file, get_file_info, move_file, delete_file
 from jarvis.tools.creator  import create_document, draft_email, translate, detect_language, generate_html, write_code
 from jarvis.tools.calendar_tool import get_calendar_events, create_calendar_event, delete_calendar_event, show_calendar
@@ -278,6 +280,29 @@ TOOLS: list[dict] = [
             "required": ["query"],
         },
     },
+    {
+        "name": "compare_travel_times",
+        "description": "Compare driving times from one origin to multiple destinations using live traffic. Use when the user asks 'how long to X vs Y' or wants to pick the fastest route.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "origin":       {"type": "string", "description": "Starting location, e.g. 'Stockholm city centre'."},
+                "destinations": {"type": "array", "items": {"type": "string"}, "description": "List of destination names to compare."},
+            },
+            "required": ["origin", "destinations"],
+        },
+    },
+    {
+        "name": "get_pollen",
+        "description": "Returns today's pollen forecast (grass, tree, weed index) for a location. Use when the user asks about pollen, hay fever, or allergy conditions.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "location": {"type": "string", "description": "Location to check pollen for (default: Stockholm)."},
+            },
+            "required": [],
+        },
+    },
 
     # ── Vision ─────────────────────────────────────────────────────────────────
     {
@@ -340,6 +365,18 @@ TOOLS: list[dict] = [
             "type": "object",
             "properties": {"tab": {"type": "string", "description": "One of: home, briefing, stocks, news, map, terminal, music, camera, settings."}},
             "required": ["tab"],
+        },
+    },
+    {
+        "name": "open_widget",
+        "description": "Opens or closes a floating widget overlay on the HUD. Widgets: chat (JARVIS chat window), spotify (music player), camera (webcam feed).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "widget": {"type": "string", "description": "One of: chat, spotify, camera"},
+                "action": {"type": "string", "description": "One of: open, close (default: open)", "enum": ["open", "close"]},
+            },
+            "required": ["widget"],
         },
     },
 
@@ -488,6 +525,56 @@ TOOLS: list[dict] = [
         "name": "gmail_triage",
         "description": "Fetch all unread inbox emails and categorise them as URGENT / ACTION / FYI with a one-line summary of each. Call this when the user says 'triage my inbox', 'what emails need attention', or 'run email triage'.",
         "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+
+    # ── YouTube ────────────────────────────────────────────────────────────────
+    {
+        "name": "youtube_search",
+        "description": "Search YouTube for videos and open the top result in the browser panel. Use when the user asks to find, watch, or play a video.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query":       {"type": "string",  "description": "Search query, e.g. 'React hooks tutorial'."},
+                "max_results": {"type": "integer", "description": "Number of results to return (default 5)."},
+            },
+            "required": ["query"],
+        },
+    },
+
+    # ── Google Drive ───────────────────────────────────────────────────────────
+    {
+        "name": "search_drive",
+        "description": "Search Google Drive for files by name or content. Returns file names, types, and links.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query":       {"type": "string",  "description": "Search term — file name or keyword inside the file."},
+                "max_results": {"type": "integer", "description": "Max files to return (default 10)."},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "read_drive_file",
+        "description": "Read the text content of a Google Doc or plain text file from Drive by its file ID.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file_id": {"type": "string", "description": "Google Drive file ID (from search_drive results)."},
+            },
+            "required": ["file_id"],
+        },
+    },
+    {
+        "name": "open_drive_file",
+        "description": "Open a Google Drive file in the JARVIS browser panel by its file ID.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file_id": {"type": "string", "description": "Google Drive file ID (from search_drive results)."},
+            },
+            "required": ["file_id"],
+        },
     },
 
     # ── System vitals ──────────────────────────────────────────────────────────
@@ -681,7 +768,9 @@ def _send_telegram_dispatch(text: str) -> str:
 _MEMORY_TOOLS = {"remember_this", "recall_fact", "forget_fact", "recall_semantic"}
 _AGENT_TOOLS  = {
     "plan_route", "look_at_desk",
-    "show_location", "search_nearby",
+    "show_location", "search_nearby", "compare_travel_times", "get_pollen",
+    "youtube_search",
+    "search_drive", "read_drive_file", "open_drive_file",
     "show_news_stream", "show_stocks", "show_briefing", "navigate_to",
     "play_music",
     "list_files", "find_file", "open_file", "get_file_info", "move_file", "delete_file",
@@ -717,10 +806,18 @@ _DISPATCH: dict = {
     "git_status":        git_status,
     "run_tests":         run_tests,
     "search_codebase":   search_codebase,
-    # map
-    "plan_route":        plan_route,
-    "show_location":     show_location,
-    "search_nearby":     search_nearby,
+    # map / environment
+    "plan_route":            plan_route,
+    "show_location":         show_location,
+    "search_nearby":         search_nearby,
+    "compare_travel_times":  compare_travel_times,
+    "get_pollen":            get_pollen,
+    # youtube
+    "youtube_search":        youtube_search,
+    # drive
+    "search_drive":          search_drive,
+    "read_drive_file":       read_drive_file,
+    "open_drive_file":       open_drive_file,
     # vision
     "look_at_desk":      look_at_desk,
     # media / navigation
@@ -730,6 +827,7 @@ _DISPATCH: dict = {
     "show_stocks":       show_stocks,
     "show_briefing":     show_briefing,
     "navigate_to":       navigate_to,
+    "open_widget":       open_widget,
     # files
     "list_files":        list_files,
     "find_file":         find_file,
@@ -833,6 +931,17 @@ def execute_tool(name: str, tool_input: dict, memory: object, agent=None, action
             action_callback(action)
         elif agent is not None:
             agent.pending_actions.append(action)
+
+    # Fire widget open/close immediately via callback (same pattern as tab switching)
+    if name == "open_widget":
+        widget_name   = tool_input.get("widget", "")
+        widget_action = tool_input.get("action", "open")
+        if widget_name in {"chat", "spotify", "camera"}:
+            evt = {"type": f"{widget_action}_widget", "widget": widget_name}
+            if action_callback:
+                action_callback(evt)
+            elif agent is not None:
+                agent.pending_actions.append(evt)
 
     if name in _MEMORY_TOOLS:
         return fn(memory=memory, **tool_input)
