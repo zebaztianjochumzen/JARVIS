@@ -55,16 +55,20 @@ p = sync_playwright().__enter__()
 b = p.chromium.launch(); b.close(); p.stop()
 " &>/dev/null 2>&1; then
   info "Installing Playwright browser (optional, browser automation)..."
-  python -m playwright install chromium 2>/dev/null || warn "Playwright browser install failed — browser_navigate tool will be unavailable. Run 'python -m playwright install chromium' manually when online."
+  python -m playwright install chromium &>/dev/null || warn "Playwright browser install failed — browser_navigate tool will be unavailable. Run 'python -m playwright install chromium' manually when online."
 fi
 
 # ── Clear stale processes on our ports ───────────────────────────────────────
+pkill -9 -f "uvicorn api.main" 2>/dev/null || true
+pkill -9 -f "vite"             2>/dev/null || true
+sleep 1
+
 for PORT in 8000 5173; do
-  PID=$(lsof -ti:"$PORT" 2>/dev/null || true)
-  if [ -n "$PID" ]; then
-    warn "Port $PORT in use — killing PID $PID"
-    kill "$PID" 2>/dev/null || true
-    sleep 0.5
+  PIDS=$(lsof -ti:"$PORT" 2>/dev/null || true)
+  if [ -n "$PIDS" ]; then
+    warn "Port $PORT still in use — force-killing $PIDS"
+    echo "$PIDS" | xargs kill -9 2>/dev/null || true
+    sleep 1
   fi
 done
 

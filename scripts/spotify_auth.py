@@ -25,7 +25,7 @@ SCOPES = (
     "user-read-playback-state "
     "user-modify-playback-state"
 )
-REDIRECT_URI = "http://localhost:8888/callback"
+REDIRECT_URI = "http://127.0.0.1:8888/callback"
 
 _code_received = threading.Event()
 _auth_code: str | None = None

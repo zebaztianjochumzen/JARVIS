@@ -127,6 +127,12 @@ def _run(token: str) -> None:
         except Exception as exc:
             bot.reply_to(message, f"Error: {exc}")
 
+    # Drop any active long-poll session from a previous (possibly force-killed) run.
+    try:
+        bot.get_updates(offset=-1, timeout=1, long_polling_timeout=1)
+    except Exception:
+        pass
+
     print("[Telegram] Polling for messages…", flush=True)
     try:
         bot.infinity_polling(timeout=20, long_polling_timeout=20)
