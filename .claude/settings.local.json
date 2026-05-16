@@ -49,7 +49,10 @@
       "Bash(python -c \"import boto3; client = boto3.client\\('secretsmanager', region_name='eu-north-1'\\); r = client.describe_secret\\(SecretId='jarvis/dev/openclaw-api-key'\\); print\\(r['ARN']\\)\")",
       "PowerShell(Test-Path \"$env:USERPROFILE\\\\.aws\\\\credentials\"; if \\(Test-Path \"$env:USERPROFILE\\\\.aws\\\\credentials\"\\) { Get-Content \"$env:USERPROFILE\\\\.aws\\\\credentials\" | Select-String \"aws_access_key_id|profile|region\" })",
       "PowerShell(winget install HashiCorp.Terraform --accept-source-agreements --accept-package-agreements 2>&1)",
-      "PowerShell($env:PATH = [Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); terraform --version 2>&1)"
+      "PowerShell($env:PATH = [Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); terraform --version 2>&1)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }
