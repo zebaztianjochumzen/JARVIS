@@ -41,13 +41,6 @@ resource "aws_iam_role_policy" "read_secrets" {
         aws_secretsmanager_secret.spotify_refresh_token.arn,
         # Reach & Integration (Phase C)
         aws_secretsmanager_secret.telegram_bot_token.arn,
-        aws_secretsmanager_secret.telegram_owner_id.arn,
-        # OpenClaw: Multi-platform messaging gateway
-        aws_secretsmanager_secret.openclaw_api_key.arn,
-        aws_secretsmanager_secret.openclaw_gateway_ws_url.arn,
-        aws_secretsmanager_secret.openclaw_admin_sessions.arn,
-        aws_secretsmanager_secret.discord_bot_token.arn,
-        aws_secretsmanager_secret.slack_bot_token.arn,
         # Google APIs
         aws_secretsmanager_secret.google_oauth_credentials.arn,
         aws_secretsmanager_secret.google_calendar_token.arn,

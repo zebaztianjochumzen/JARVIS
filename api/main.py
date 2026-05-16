@@ -10,8 +10,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, F
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse, Response
 
-# Load .env only if present — in production all secrets come from AWS Secrets Manager
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'), override=False)
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from jarvis import secrets as _secrets
@@ -33,29 +32,13 @@ except Exception as _mcpe:
     print(f"[JARVIS] MCP client skipped: {_mcpe}", flush=True)
     _mcp_client = None  # type: ignore
 
-# ── Boot OpenClaw gateway (multi-platform messaging) ──────────────────────────
-try:
-    from jarvis import openclaw_gateway as _openclaw
-    _openclaw.start(lambda: Agent())
-    print("[JARVIS] OpenClaw gateway started.", flush=True)
-except Exception as _ocge:
-    print(f"[JARVIS] OpenClaw gateway skipped: {_ocge}", flush=True)
-    _openclaw = None  # type: ignore
-
-# ── Boot Telegram bot (fallback if OpenClaw not configured) ───────────────────
+# ── Boot Telegram bot ─────────────────────────────────────────────────────────
 try:
     from jarvis import telegram_bot as _telegram_bot
     _telegram_bot.start(lambda: Agent())
 except Exception as _tge:
     print(f"[JARVIS] Telegram bot skipped: {_tge}", flush=True)
     _telegram_bot = None  # type: ignore
-
-# ── Register approval broadcast with WebSocket clients ────────────────────────
-try:
-    from jarvis import approval as _approval
-    # Broadcast callback registered after app starts (see websocket handler below)
-except Exception:
-    _approval = None  # type: ignore
 
 # ── Boot wake-word background listener ────────────────────────────────────────
 try:
@@ -66,26 +49,6 @@ except Exception as _wwe:
     _wakeword = None  # type: ignore
 
 app = FastAPI()
-
-# ── Mount OpenClaw SDK routers (/openclaw/*) ──────────────────────────────────
-try:
-    from openclaw_sdk.integrations.fastapi import (
-        create_agent_router,
-        create_channel_router,
-        create_admin_router,
-    )
-    from jarvis.openclaw_gateway import get_adapter
-
-    _oc_adapter = get_adapter()
-    if _oc_adapter is not None:
-        app.include_router(create_agent_router(agent=_oc_adapter),  prefix="/openclaw")
-        app.include_router(create_channel_router(),                   prefix="/openclaw")
-        app.include_router(create_admin_router(),                     prefix="/openclaw")
-        print("[JARVIS] OpenClaw SDK routers mounted at /openclaw", flush=True)
-except ImportError:
-    print("[JARVIS] openclaw-sdk not installed — /openclaw routes unavailable. Run: pip install openclaw-sdk", flush=True)
-except Exception as _ocre:
-    print(f"[JARVIS] OpenClaw router mount skipped: {_ocre}", flush=True)
 
 # ── Mount vision server (camera + gesture) on /vision ─────────────────────────
 try:
@@ -193,25 +156,12 @@ async def get_system_status():
     except Exception as e:
         result["obsidian"] = {"ok": False, "configured": False, "summary": str(e)[:80]}
 
-    # Autonomous scheduler + heartbeat
+    # Autonomous scheduler
     try:
         from jarvis import scheduler as _sch
-        from jarvis import heartbeat as _hb
-        result["scheduler"] = {
-            "ok":               True,
-            "running":          _sch._started,
-            "heartbeat_active": _hb._started,
-            "heartbeat_file":   str(_hb.HEARTBEAT_PATH),
-        }
+        result["scheduler"] = {"ok": True, "running": _sch._started}
     except Exception:
         result["scheduler"] = {"ok": False, "running": False}
-
-    # OpenClaw gateway
-    try:
-        from jarvis.openclaw_gateway import get_status as _oc_status
-        result["openclaw"] = _oc_status()
-    except Exception as exc:
-        result["openclaw"] = {"ok": False, "error": str(exc)[:80]}
 
     # Memory database
     try:
@@ -319,66 +269,6 @@ async def vitals_stream():
     )
 
 
-# ── Approval endpoints ────────────────────────────────────────────────────────
-
-@app.get("/api/approvals")
-async def list_approvals():
-    """List all pending approval requests."""
-    try:
-        from jarvis.approval import list_pending
-        return {"pending": list_pending()}
-    except Exception as exc:
-        return {"pending": [], "error": str(exc)}
-
-
-@app.post("/api/approve")
-async def approve_tool(body: dict):
-    """Approve or deny a pending tool call.
-
-    Body: { "approval_id": "abc12345", "approved": true }
-    """
-    approval_id = body.get("approval_id", "").strip()
-    approved    = bool(body.get("approved", False))
-    if not approval_id:
-        return JSONResponse({"error": "approval_id required"}, status_code=400)
-    try:
-        from jarvis.approval import resolve
-        found = resolve(approval_id, approved)
-        if not found:
-            return JSONResponse({"error": "approval_id not found or already resolved"}, status_code=404)
-        return {"ok": True, "approved": approved}
-    except Exception as exc:
-        return JSONResponse({"error": str(exc)}, status_code=500)
-
-
-# ── Heartbeat endpoints ───────────────────────────────────────────────────────
-
-@app.get("/api/heartbeat/reload")
-async def heartbeat_reload():
-    """Force HEARTBEAT.md to be re-parsed without restarting."""
-    try:
-        from jarvis.heartbeat import reload
-        result = reload()
-        return {"ok": True, "result": result}
-    except Exception as exc:
-        return JSONResponse({"error": str(exc)}, status_code=500)
-
-
-# ── OpenClaw status endpoint ──────────────────────────────────────────────────
-
-@app.get("/api/openclaw/status")
-async def openclaw_status():
-    """Live status of the OpenClaw gateway and active sessions."""
-    try:
-        from jarvis.openclaw_gateway import get_status, get_adapter
-        status  = get_status()
-        adapter = get_adapter()
-        status["active_sessions"] = adapter.active_sessions() if adapter else []
-        return status
-    except Exception as exc:
-        return {"error": str(exc)}
-
-
 # ── Telegram send endpoint ────────────────────────────────────────────────────
 
 @app.post("/api/telegram/send")
@@ -390,22 +280,6 @@ async def telegram_send(body: dict):
     try:
         from jarvis import telegram_bot
         result = telegram_bot.send_message(text)
-        return {"result": result}
-    except Exception as exc:
-        return JSONResponse({"error": str(exc)}, status_code=500)
-
-
-# ── Broadcast message to all OpenClaw channels ────────────────────────────────
-
-@app.post("/api/message/broadcast")
-async def broadcast_message(body: dict):
-    """Broadcast a message to all connected OpenClaw channels."""
-    text = body.get("text", "").strip()
-    if not text:
-        return JSONResponse({"error": "no text"}, status_code=400)
-    try:
-        from jarvis.tools import _send_message_dispatch
-        result = _send_message_dispatch(text)
         return {"result": result}
     except Exception as exc:
         return JSONResponse({"error": str(exc)}, status_code=500)
@@ -755,29 +629,10 @@ async def websocket_endpoint(websocket: WebSocket):
     sched_q: _queue.Queue = _queue.Queue()
     _scheduler.add_client(sched_q)
 
-    # Register this WebSocket connection as an approval broadcast target
-    approval_q: _queue.Queue = _queue.Queue()
-    if _approval is not None:
-        def _approval_broadcast(payload: dict):
-            try:
-                approval_q.put_nowait(payload)
-            except Exception:
-                pass
-        _approval.register_broadcast(_approval_broadcast)
-
     async def _watch_scheduler():
-        """Dispatch scheduled tasks and forward approval requests to the HUD."""
+        """Dispatch autonomous task messages to the agent when the scheduler fires."""
         while True:
-            await asyncio.sleep(5)
-            # Forward approval requests to the browser
-            try:
-                approval_event = approval_q.get_nowait()
-                await websocket.send_text(json.dumps(approval_event))
-            except _queue.Empty:
-                pass
-            except Exception:
-                pass
-            # Dispatch heartbeat / scheduler tasks to the agent
+            await asyncio.sleep(10)
             try:
                 event = sched_q.get_nowait()
                 task_msg = event.get("message", "")

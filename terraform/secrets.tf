@@ -54,56 +54,6 @@ resource "aws_secretsmanager_secret" "telegram_bot_token" {
   tags = { Name = "${var.project_name}-${var.environment}-telegram-bot-token" }
 }
 
-resource "aws_secretsmanager_secret" "telegram_owner_id" {
-  name                    = "jarvis/${var.environment}/telegram-owner-id"
-  description             = "Telegram numeric user ID of the authorised owner — rejects all other senders"
-  recovery_window_in_days = 0
-
-  tags = { Name = "${var.project_name}-${var.environment}-telegram-owner-id" }
-}
-
-# ── OpenClaw: Multi-platform messaging gateway ────────────────────────────────
-
-resource "aws_secretsmanager_secret" "openclaw_api_key" {
-  name                    = "jarvis/${var.environment}/openclaw-api-key"
-  description             = "OpenClaw gateway bearer token (gateway.secret in openclaw config)"
-  recovery_window_in_days = 0
-
-  tags = { Name = "${var.project_name}-${var.environment}-openclaw-api-key" }
-}
-
-resource "aws_secretsmanager_secret" "openclaw_gateway_ws_url" {
-  name                    = "jarvis/${var.environment}/openclaw-gateway-ws-url"
-  description             = "WebSocket URL of the running OpenClaw gateway (ws://host:18789)"
-  recovery_window_in_days = 0
-
-  tags = { Name = "${var.project_name}-${var.environment}-openclaw-gateway-ws-url" }
-}
-
-resource "aws_secretsmanager_secret" "openclaw_admin_sessions" {
-  name                    = "jarvis/${var.environment}/openclaw-admin-sessions"
-  description             = "Comma-separated OpenClaw session IDs with full operator access"
-  recovery_window_in_days = 0
-
-  tags = { Name = "${var.project_name}-${var.environment}-openclaw-admin-sessions" }
-}
-
-resource "aws_secretsmanager_secret" "discord_bot_token" {
-  name                    = "jarvis/${var.environment}/discord-bot-token"
-  description             = "Discord bot token — optional OpenClaw channel"
-  recovery_window_in_days = 0
-
-  tags = { Name = "${var.project_name}-${var.environment}-discord-bot-token" }
-}
-
-resource "aws_secretsmanager_secret" "slack_bot_token" {
-  name                    = "jarvis/${var.environment}/slack-bot-token"
-  description             = "Slack bot OAuth token — optional OpenClaw channel"
-  recovery_window_in_days = 0
-
-  tags = { Name = "${var.project_name}-${var.environment}-slack-bot-token" }
-}
-
 # ── Google APIs (Calendar + Gmail) ────────────────────────────────────────────
 #
 # Store the full JSON content of credentials.json downloaded from Google Cloud Console.

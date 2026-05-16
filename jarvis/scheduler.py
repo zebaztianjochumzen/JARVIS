@@ -68,16 +68,7 @@ def start() -> None:
     if email_digest in ("1", "true", "yes"):
         threading.Thread(target=_email_digest_loop, daemon=True, name="sched-email").start()
 
-    # Start the OpenClaw heartbeat alongside the legacy tasks.
-    # The heartbeat reads HEARTBEAT.md and fires dynamic tasks using the same
-    # client queue, so both systems coexist without conflicts.
-    try:
-        from jarvis import heartbeat as _heartbeat
-        _heartbeat.start(_clients, _lock)
-    except Exception as exc:
-        print(f"[Scheduler] Heartbeat skipped: {exc}", flush=True)
-
-    print("[Scheduler] Background tasks started (+ OpenClaw heartbeat)", flush=True)
+    print("[Scheduler] Background tasks started", flush=True)
 
 
 # ── Task: morning briefing ────────────────────────────────────────────────────

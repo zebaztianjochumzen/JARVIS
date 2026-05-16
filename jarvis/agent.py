@@ -30,13 +30,7 @@ class Agent:
         facts_block = "\n".join(f"- {k}: {v}" for k, v in facts.items())
         return f"{self.soul}\n\n## What you know about the user\n{facts_block}"
 
-    def ask(self, user_input: str, stream_callback=None, action_callback=None, tool_filter=None) -> str:
-        """Run the agent.
-
-        tool_filter: optional set/frozenset of tool names to EXCLUDE from this
-        call. Used by OpenClaw gateway to sandbox guest sessions without
-        touching global state.
-        """
+    def ask(self, user_input: str, stream_callback=None, action_callback=None) -> str:
         self.memory.append_message("user", user_input)
 
         # ── Context compression ───────────────────────────────────────────────
@@ -44,12 +38,7 @@ class Agent:
             self._compress_context()
 
         messages = self.memory.get_messages_with_context(MAX_HISTORY)
-        response_text = self._run(
-            messages,
-            stream_callback=stream_callback,
-            action_callback=action_callback,
-            tool_filter=tool_filter,
-        )
+        response_text = self._run(messages, stream_callback=stream_callback, action_callback=action_callback)
 
         self.memory.append_message("assistant", response_text)
         return response_text
@@ -99,11 +88,8 @@ class Agent:
 
     # ── Main inference loop ───────────────────────────────────────────────────
 
-    def _run(self, messages: list[dict[str, str]], stream_callback=None, action_callback=None, tool_filter=None) -> str:
-        """Stream a response, executing tool calls until a final text reply is produced.
-
-        tool_filter: optional set of tool names to exclude (guest-session sandbox).
-        """
+    def _run(self, messages: list[dict[str, str]], stream_callback=None, action_callback=None) -> str:
+        """Stream a response, executing tool calls until a final text reply is produced."""
         self._cancelled = False
         msg_list: list[dict] = list(messages)
 
@@ -116,9 +102,6 @@ class Agent:
                 all_tools = TOOLS + _mcp.get_mcp_tools()
             except ImportError:
                 all_tools = TOOLS
-
-            if tool_filter:
-                all_tools = [t for t in all_tools if t["name"] not in tool_filter]
 
             with self.client.messages.stream(
                 model=MODEL,
