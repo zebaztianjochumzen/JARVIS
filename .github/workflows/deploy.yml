@@ -10,6 +10,16 @@ on:
         options:
           - dev
           - production
+      force_terraform:
+        description: Force terraform apply even if no .tf files changed
+        required: false
+        type: boolean
+        default: false
+      force_app:
+        description: Force app deploy even if no app files changed
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -41,13 +51,13 @@ jobs:
           echo "Changed files:"
           echo "$CHANGED"
 
-          if echo "$CHANGED" | grep -qE '^(terraform|bootstrap)/.*\.tf$'; then
+          if [[ "${{ inputs.force_terraform }}" == "true" ]] || echo "$CHANGED" | grep -qE '^(terraform|bootstrap)/.*\.tf$'; then
             echo "infrastructure=true" >> $GITHUB_OUTPUT
           else
             echo "infrastructure=false" >> $GITHUB_OUTPUT
           fi
 
-          if echo "$CHANGED" | grep -qvE '^(terraform|bootstrap|\.github|docs)/'; then
+          if [[ "${{ inputs.force_app }}" == "true" ]] || echo "$CHANGED" | grep -qvE '^(terraform|bootstrap|\.github|docs)/'; then
             echo "app=true" >> $GITHUB_OUTPUT
           else
             echo "app=false" >> $GITHUB_OUTPUT
