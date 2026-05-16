@@ -26,13 +26,9 @@ def _service():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            if not CREDS_PATH.exists():
-                raise FileNotFoundError(
-                    "Google Drive not configured. Place credentials.json in the JARVIS root "
-                    "and enable the Drive API in Google Cloud Console."
-                )
-            flow = InstalledAppFlow.from_client_secrets_file(str(CREDS_PATH), DRIVE_SCOPES)
-            creds = flow.run_local_server(port=0)
+            from jarvis.tools.google_auth import get_credentials_path
+            flow = InstalledAppFlow.from_client_secrets_file(str(get_credentials_path()), DRIVE_SCOPES)
+            creds = flow.run_local_server(port=8085)
         DRIVE_TOKEN.write_text(creds.to_json())
 
     return build("drive", "v3", credentials=creds)

@@ -138,12 +138,20 @@ resource "aws_secretsmanager_secret" "google_api_key" {
   tags = { Name = "${var.project_name}-${var.environment}-google-api-key" }
 }
 
-resource "aws_secretsmanager_secret" "google_oauth_credentials" {
-  name                    = "jarvis/${var.environment}/google-oauth-credentials"
-  description             = "Google OAuth2 credentials JSON (Desktop app) — Calendar, Gmail, Drive"
+resource "aws_secretsmanager_secret" "google_client_id" {
+  name                    = "jarvis/${var.environment}/google-client-id"
+  description             = "Google OAuth2 client ID — Calendar, Gmail, Drive"
   recovery_window_in_days = 0
 
-  tags = { Name = "${var.project_name}-${var.environment}-google-oauth-credentials" }
+  tags = { Name = "${var.project_name}-${var.environment}-google-client-id" }
+}
+
+resource "aws_secretsmanager_secret" "google_client_secret" {
+  name                    = "jarvis/${var.environment}/google-client-secret"
+  description             = "Google OAuth2 client secret — Calendar, Gmail, Drive"
+  recovery_window_in_days = 0
+
+  tags = { Name = "${var.project_name}-${var.environment}-google-client-secret" }
 }
 
 resource "aws_secretsmanager_secret" "google_calendar_token" {

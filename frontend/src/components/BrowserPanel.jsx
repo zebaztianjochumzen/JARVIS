@@ -10,6 +10,8 @@ function resolveUrl(raw) {
   // YouTube video → embed player
   const yt = raw.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
   if (yt) return `https://www.youtube.com/embed/${yt[1]}?autoplay=0`
+  // Google Maps Embed API → load directly (designed for iframes, no proxy needed)
+  if (raw.includes('google.com/maps/embed')) return raw
   // All other URLs → proxy
   return PROXY(raw)
 }

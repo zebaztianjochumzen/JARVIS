@@ -37,6 +37,10 @@ __pycache__/
 
 # Local secrets
 .env
+credentials.json
+token.json
+gmail_token.json
+drive_token.json
 
 # Node
 frontend/node_modules/

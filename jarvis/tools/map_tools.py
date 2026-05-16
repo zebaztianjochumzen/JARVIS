@@ -90,6 +90,33 @@ def get_pollen(location: str = "Stockholm", agent=None) -> str:
         return f"get_pollen failed: {e}"
 
 
+def show_street_view(place: str, near: str = "Stockholm", agent=None) -> str:
+    """Find the nearest matching place and show its Street View in the browser panel."""
+    try:
+        from jarvis.tools.google_maps import geocode, places_nearby, embed_streetview_url
+
+        lat, lon, _ = geocode(near)
+        places = places_nearby(place, lat, lon, radius_m=5000)
+
+        if places:
+            p = places[0]
+            url = embed_streetview_url(p["lat"], p["lon"])
+            label = f"{p['name']} — {p['address']}"
+        else:
+            p_lat, p_lon, label = geocode(f"{place} {near}")
+            url = embed_streetview_url(p_lat, p_lon)
+
+        if agent is not None:
+            agent.pending_actions.append({"type": "show_browser", "url": url})
+
+        return f"Showing Street View for {label}."
+
+    except RuntimeError:
+        return "Street View requires GOOGLE_API_KEY to be configured."
+    except Exception as e:
+        return f"show_street_view failed: {e}"
+
+
 def search_nearby(query: str, location: str = "Stockholm", agent=None) -> str:
     """Find places matching a query near a given location."""
 

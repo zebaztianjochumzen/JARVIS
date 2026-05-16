@@ -30,15 +30,11 @@ def _service():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            if not CREDS_PATH.exists():
-                raise FileNotFoundError(
-                    "Gmail not configured. Place credentials.json in the JARVIS root "
-                    "and enable the Gmail API in Google Cloud Console → APIs & Services."
-                )
+            from jarvis.tools.google_auth import get_credentials_path
             flow = InstalledAppFlow.from_client_secrets_file(
-                str(CREDS_PATH), GMAIL_SCOPES
+                str(get_credentials_path()), GMAIL_SCOPES
             )
-            creds = flow.run_local_server(port=0)
+            creds = flow.run_local_server(port=8085)
         GMAIL_TOKEN.write_text(creds.to_json())
 
     return build("gmail", "v1", credentials=creds)

@@ -33,8 +33,9 @@ _SECRET_MAP: dict[str, tuple[str, str]] = {
     "TELEGRAM_OWNER_ID":         ("jarvis/{env}/telegram-owner-id",         "TELEGRAM_OWNER_ID"),
     "DISCORD_BOT_TOKEN":         ("jarvis/{env}/discord-bot-token",         "DISCORD_BOT_TOKEN"),
     "SLACK_BOT_TOKEN":           ("jarvis/{env}/slack-bot-token",           "SLACK_BOT_TOKEN"),
-    # Google APIs  — stored as raw JSON string (full credentials.json content)
-    "GOOGLE_CREDENTIALS":      ("jarvis/{env}/google-oauth-credentials",  "GOOGLE_CREDENTIALS"),
+    # Google OAuth client (two separate secrets)
+    "GOOGLE_CLIENT_ID":        ("jarvis/{env}/google-client-id",          "GOOGLE_CLIENT_ID"),
+    "GOOGLE_CLIENT_SECRET":    ("jarvis/{env}/google-client-secret",      "GOOGLE_CLIENT_SECRET"),
     "GOOGLE_CALENDAR_TOKEN":   ("jarvis/{env}/google-calendar-token",    "GOOGLE_CALENDAR_TOKEN"),
     "GOOGLE_GMAIL_TOKEN":      ("jarvis/{env}/google-gmail-token",       "GOOGLE_GMAIL_TOKEN"),
     "GOOGLE_API_KEY":          ("jarvis/{env}/google-api-key",           "GOOGLE_API_KEY"),

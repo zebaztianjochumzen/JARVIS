@@ -140,6 +140,22 @@ def pollen_forecast(lat: float, lon: float) -> dict:
     return result
 
 
+def embed_streetview_url(lat: float, lon: float) -> str:
+    """Return a Maps Embed API Street View URL — iframe-safe, no proxy needed."""
+    return (
+        f"https://www.google.com/maps/embed/v1/streetview"
+        f"?key={_key()}&location={lat},{lon}&heading=210&pitch=10&fov=90"
+    )
+
+
+def embed_place_url(place_id: str) -> str:
+    """Return a Maps Embed API place view URL — iframe-safe, no proxy needed."""
+    return (
+        f"https://www.google.com/maps/embed/v1/place"
+        f"?key={_key()}&q=place_id:{place_id}&zoom=16"
+    )
+
+
 def places_nearby(query: str, lat: float, lon: float, radius_m: int = 3000) -> list[dict]:
     """Search Google Places near a location. Returns up to 8 results."""
     r = requests.get(_PLACES_URL, params={

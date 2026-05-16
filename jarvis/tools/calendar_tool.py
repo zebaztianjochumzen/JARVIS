@@ -1,13 +1,42 @@
 """Google Calendar tools — read, create, and show calendar events."""
 
 import datetime
+import os
 from pathlib import Path
 
-SCOPES      = ['https://www.googleapis.com/auth/calendar']
-REPO_ROOT   = Path(__file__).parent.parent.parent
-CREDS_PATH  = REPO_ROOT / 'credentials.json'
-TOKEN_PATH  = REPO_ROOT / 'token.json'
-TZ          = 'Europe/Stockholm'
+SCOPES    = ['https://www.googleapis.com/auth/calendar']
+REPO_ROOT = Path(__file__).parent.parent.parent
+TOKEN_PATH = REPO_ROOT / 'token.json'
+TZ        = 'Europe/Stockholm'
+
+
+def _creds_path() -> Path:
+    from jarvis.tools.google_auth import get_credentials_path
+    return get_credentials_path()
+
+
+def _token_path() -> Path:
+    """Return path to token.json, checking AWS Secrets Manager if file is missing."""
+    if TOKEN_PATH.exists():
+        return TOKEN_PATH
+
+    raw = os.environ.get('GOOGLE_CALENDAR_TOKEN', '').strip()
+    if raw:
+        TOKEN_PATH.write_text(raw)
+        return TOKEN_PATH
+
+    return TOKEN_PATH  # may not exist yet — first-run OAuth will create it
+
+
+def _save_token(creds) -> None:
+    """Persist token locally and to AWS Secrets Manager."""
+    token_json = creds.to_json()
+    TOKEN_PATH.write_text(token_json)
+    try:
+        from jarvis.secrets import put_secret
+        put_secret('GOOGLE_CALENDAR_TOKEN', token_json)
+    except Exception:
+        pass
 
 
 def _service():
@@ -16,23 +45,18 @@ def _service():
     from google.auth.transport.requests import Request
     from googleapiclient.discovery import build
 
+    tp = _token_path()
     creds = None
-    if TOKEN_PATH.exists():
-        creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
+    if tp.exists():
+        creds = Credentials.from_authorized_user_file(str(tp), SCOPES)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            if not CREDS_PATH.exists():
-                raise FileNotFoundError(
-                    "Google Calendar not configured. "
-                    "Add credentials.json to the JARVIS root directory. "
-                    "Download it from Google Cloud Console → APIs & Services → Credentials."
-                )
-            flow = InstalledAppFlow.from_client_secrets_file(str(CREDS_PATH), SCOPES)
-            creds = flow.run_local_server(port=0)
-        TOKEN_PATH.write_text(creds.to_json())
+            flow = InstalledAppFlow.from_client_secrets_file(str(_creds_path()), SCOPES)
+            creds = flow.run_local_server(port=8085)
+        _save_token(creds)
 
     return build('calendar', 'v3', credentials=creds)
 

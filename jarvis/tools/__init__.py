@@ -6,7 +6,7 @@ from jarvis.tools.vision   import look_at_desk
 from jarvis.tools.info     import web_search, get_news, get_weather, get_stock_price, get_market_summary
 from jarvis.tools.system   import set_timer, open_app, open_url, run_shell, take_screenshot, read_clipboard, write_clipboard
 from jarvis.tools.dev      import read_file, write_file, git_status, run_tests, search_codebase
-from jarvis.tools.map_tools import show_location, search_nearby, compare_travel_times, get_pollen
+from jarvis.tools.map_tools import show_location, search_nearby, compare_travel_times, get_pollen, show_street_view
 from jarvis.tools.youtube_tool import youtube_search
 from jarvis.tools.google_drive import search_drive, read_drive_file, open_drive_file
 from jarvis.tools.media    import play_music, set_volume, show_news_stream, show_stocks, show_briefing, navigate_to, open_widget
@@ -278,6 +278,18 @@ TOOLS: list[dict] = [
                 "location": {"type": "string", "description": "Anchor location (default: Stockholm)."},
             },
             "required": ["query"],
+        },
+    },
+    {
+        "name": "show_street_view",
+        "description": "Find a nearby place and show its Google Street View in the browser panel. Use when the user wants to see what a place looks like, e.g. 'show me the nearest Pressbyrån' or 'what does that café look like'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "place": {"type": "string", "description": "The type or name of place to find, e.g. 'Pressbyrån', \"McDonald's\", 'Stockholm Central Station'."},
+                "near":  {"type": "string", "description": "Anchor location to search near (default: Stockholm)."},
+            },
+            "required": ["place"],
         },
     },
     {
@@ -768,7 +780,7 @@ def _send_telegram_dispatch(text: str) -> str:
 _MEMORY_TOOLS = {"remember_this", "recall_fact", "forget_fact", "recall_semantic"}
 _AGENT_TOOLS  = {
     "plan_route", "look_at_desk",
-    "show_location", "search_nearby", "compare_travel_times", "get_pollen",
+    "show_location", "search_nearby", "compare_travel_times", "get_pollen", "show_street_view",
     "youtube_search",
     "search_drive", "read_drive_file", "open_drive_file",
     "show_news_stream", "show_stocks", "show_briefing", "navigate_to",
@@ -812,6 +824,7 @@ _DISPATCH: dict = {
     "search_nearby":         search_nearby,
     "compare_travel_times":  compare_travel_times,
     "get_pollen":            get_pollen,
+    "show_street_view":      show_street_view,
     # youtube
     "youtube_search":        youtube_search,
     # drive
