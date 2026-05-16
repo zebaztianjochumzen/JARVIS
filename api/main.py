@@ -33,16 +33,7 @@ except Exception as _mcpe:
     print(f"[JARVIS] MCP client skipped: {_mcpe}", flush=True)
     _mcp_client = None  # type: ignore
 
-# ── Boot OpenClaw gateway (multi-platform messaging) ──────────────────────────
-try:
-    from jarvis import openclaw_gateway as _openclaw
-    _openclaw.start(lambda: Agent())
-    print("[JARVIS] OpenClaw gateway started.", flush=True)
-except Exception as _ocge:
-    print(f"[JARVIS] OpenClaw gateway skipped: {_ocge}", flush=True)
-    _openclaw = None  # type: ignore
-
-# ── Boot Telegram bot (fallback if OpenClaw not configured) ───────────────────
+# ── Boot Telegram bot ─────────────────────────────────────────────────────────
 try:
     from jarvis import telegram_bot as _telegram_bot
     _telegram_bot.start(lambda: Agent())
@@ -66,26 +57,6 @@ except Exception as _wwe:
     _wakeword = None  # type: ignore
 
 app = FastAPI()
-
-# ── Mount OpenClaw SDK routers (/openclaw/*) ──────────────────────────────────
-try:
-    from openclaw_sdk.integrations.fastapi import (
-        create_agent_router,
-        create_channel_router,
-        create_admin_router,
-    )
-    from jarvis.openclaw_gateway import get_adapter
-
-    _oc_adapter = get_adapter()
-    if _oc_adapter is not None:
-        app.include_router(create_agent_router(agent=_oc_adapter),  prefix="/openclaw")
-        app.include_router(create_channel_router(),                   prefix="/openclaw")
-        app.include_router(create_admin_router(),                     prefix="/openclaw")
-        print("[JARVIS] OpenClaw SDK routers mounted at /openclaw", flush=True)
-except ImportError:
-    print("[JARVIS] openclaw-sdk not installed — /openclaw routes unavailable. Run: pip install openclaw-sdk", flush=True)
-except Exception as _ocre:
-    print(f"[JARVIS] OpenClaw router mount skipped: {_ocre}", flush=True)
 
 # ── Mount vision server (camera + gesture) on /vision ─────────────────────────
 try:
@@ -205,13 +176,6 @@ async def get_system_status():
         }
     except Exception:
         result["scheduler"] = {"ok": False, "running": False}
-
-    # OpenClaw gateway
-    try:
-        from jarvis.openclaw_gateway import get_status as _oc_status
-        result["openclaw"] = _oc_status()
-    except Exception as exc:
-        result["openclaw"] = {"ok": False, "error": str(exc)[:80]}
 
     # Memory database
     try:
@@ -364,21 +328,6 @@ async def heartbeat_reload():
         return JSONResponse({"error": str(exc)}, status_code=500)
 
 
-# ── OpenClaw status endpoint ──────────────────────────────────────────────────
-
-@app.get("/api/openclaw/status")
-async def openclaw_status():
-    """Live status of the OpenClaw gateway and active sessions."""
-    try:
-        from jarvis.openclaw_gateway import get_status, get_adapter
-        status  = get_status()
-        adapter = get_adapter()
-        status["active_sessions"] = adapter.active_sessions() if adapter else []
-        return status
-    except Exception as exc:
-        return {"error": str(exc)}
-
-
 # ── Telegram send endpoint ────────────────────────────────────────────────────
 
 @app.post("/api/telegram/send")
@@ -390,22 +339,6 @@ async def telegram_send(body: dict):
     try:
         from jarvis import telegram_bot
         result = telegram_bot.send_message(text)
-        return {"result": result}
-    except Exception as exc:
-        return JSONResponse({"error": str(exc)}, status_code=500)
-
-
-# ── Broadcast message to all OpenClaw channels ────────────────────────────────
-
-@app.post("/api/message/broadcast")
-async def broadcast_message(body: dict):
-    """Broadcast a message to all connected OpenClaw channels."""
-    text = body.get("text", "").strip()
-    if not text:
-        return JSONResponse({"error": "no text"}, status_code=400)
-    try:
-        from jarvis.tools import _send_message_dispatch
-        result = _send_message_dispatch(text)
         return {"result": result}
     except Exception as exc:
         return JSONResponse({"error": str(exc)}, status_code=500)

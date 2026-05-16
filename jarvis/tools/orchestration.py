@@ -3,8 +3,7 @@
 Gives Claude the ability to spawn multiple isolated Agent instances in
 parallel threads, each tackling a sub-query, then collect and merge results.
 
-This maps to OpenClaw's spawn/send/monitor capability but runs entirely
-within JARVIS's existing Python process — no extra services required.
+Runs entirely within JARVIS's existing Python process — no extra services required.
 
 Tools exposed to Claude:
   spawn_parallel_research(topics, query_template) → merged research

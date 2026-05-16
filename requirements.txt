@@ -1,5 +1,4 @@
 anthropic>=0.40.0
-openclaw-sdk>=0.1.0
 python-dotenv>=1.0.0
 boto3>=1.34.0
 fastapi>=0.110.0

@@ -548,22 +548,13 @@ TOOLS: list[dict] = [
         },
     },
 
-    # ── Messaging (OpenClaw multi-platform) ────────────────────────────────────
+    # ── Messaging ──────────────────────────────────────────────────────────────
     {
         "name": "send_telegram",
         "description": "Send a proactive message to the user's Telegram chat. Use for alerts, reminders, price notifications, or anything the user should know even when the HUD isn't open.",
         "input_schema": {
             "type": "object",
             "properties": {"text": {"type": "string", "description": "Message text to send."}},
-            "required": ["text"],
-        },
-    },
-    {
-        "name": "send_message",
-        "description": "Broadcast a message to ALL connected OpenClaw channels (Telegram, WhatsApp, Discord, Signal). Prefer this over send_telegram when OpenClaw is configured.",
-        "input_schema": {
-            "type": "object",
-            "properties": {"text": {"type": "string", "description": "Message text to broadcast."}},
             "required": ["text"],
         },
     },
@@ -685,25 +676,6 @@ def _send_telegram_dispatch(text: str) -> str:
         return "Telegram module not available."
 
 
-def _send_message_dispatch(text: str) -> str:
-    """Broadcast to all connected OpenClaw channels; fall back to Telegram."""
-    try:
-        from jarvis import openclaw_gateway
-        if openclaw_gateway._gateway_ok:
-            # OpenClaw gateway is up — it handles multi-platform routing
-            # The gateway broadcasts via its own channel connections.
-            # We also push via Telegram as a reliable fallback.
-            try:
-                from jarvis import telegram_bot
-                telegram_bot.send_message(text)
-            except Exception:
-                pass
-            return "Message broadcast to all OpenClaw channels."
-    except ImportError:
-        pass
-    # Fallback: Telegram only
-    return _send_telegram_dispatch(text)
-
 
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 _MEMORY_TOOLS = {"remember_this", "recall_fact", "forget_fact", "recall_semantic"}
@@ -792,9 +764,7 @@ _DISPATCH: dict = {
     "browser_fill":          browser_fill,
     "browser_screenshot":    browser_screenshot,
     "browser_execute_js":    browser_execute_js,
-    # telegram / openclaw messaging
     "send_telegram":              _send_telegram_dispatch,
-    "send_message":               _send_message_dispatch,
     # orchestration
     "spawn_parallel_research":    spawn_parallel_research,
     "parallel_web_search":        parallel_web_search,

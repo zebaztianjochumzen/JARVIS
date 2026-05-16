@@ -1,0 +1,27 @@
+{
+  "_comment": "Add MCP servers here. Each server is started as a stdio subprocess. Requires Node.js for npx-based servers.",
+  "servers": [
+    {
+      "_comment": "Example \u2014 uncomment and fill in to activate",
+      "_name": "filesystem",
+      "_command": "npx",
+      "_args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "C:/Users/you/Documents"
+      ]
+    },
+    {
+      "_comment": "Example \u2014 GitHub integration",
+      "_name": "github",
+      "_command": "npx",
+      "_args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "_env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_your_token_here"
+      }
+    }
+  ]
+}

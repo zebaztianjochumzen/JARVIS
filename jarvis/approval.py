@@ -3,7 +3,7 @@
 When Claude calls a tool in DANGEROUS_TOOLS, execution is paused and an
 approval request is broadcast to:
   1. The HUD via WebSocket (shows an approval modal in the browser)
-  2. All registered OpenClaw channels (user sees a yes/no prompt on mobile)
+  2. Telegram (user sees a yes/no prompt on mobile)
 
 The agent thread blocks for up to APPROVAL_TIMEOUT_SECONDS waiting for a
 decision. If no decision arrives, the call is denied (safe default).

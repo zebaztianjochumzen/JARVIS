@@ -34,8 +34,7 @@ class Agent:
         """Run the agent.
 
         tool_filter: optional set/frozenset of tool names to EXCLUDE from this
-        call. Used by OpenClaw gateway to sandbox guest sessions without
-        touching global state.
+        call.
         """
         self.memory.append_message("user", user_input)
 
